@@ -18,12 +18,13 @@ plt.rc('legend', fontsize=MED)   # legend fontsize
 plt.rc('font', size=LARGE)         # controls default text sizes
 
 TRADING_DAYS = 252
-UNITS, PRICE, BUY_DATE, SELL_DATE, SELL_PRICE = 0, 1, 2, 3, 4
+UNITS, BUY_PRICE, BUY_DATE, SELL_DATE, SELL_PRICE, FEE = 0, 1, 2, 3, 4, 5
 INITIAL_CASH = 20_000
 TOMORROW = dt.datetime.today().date() + dt.timedelta(days=1)
 
 CODE = 0
 def load_comp(filename):
+    ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
     comp = {}
     with open('./comps/'+filename+'.csv', newline='') as f:
         next(csv.reader(f, delimiter=' ', quotechar='|'))
@@ -35,27 +36,34 @@ def load_comp(filename):
             
             # Convert units and prices to int/float
             row[UNITS] = int(row[UNITS])
-            row[PRICE] = float(row[PRICE])
+            row[BUY_PRICE] = float(row[BUY_PRICE])
             row[SELL_PRICE] = float(row[SELL_PRICE])
             row[BUY_DATE] = row[BUY_DATE].split('/')[::-1]
             row[BUY_DATE][2] = f'{int(row[BUY_DATE][2]):02d}'
             row[BUY_DATE] = '-'.join(row[BUY_DATE])
             row[SELL_DATE] = TOMORROW if row[SELL_DATE] == '-1' else pd.to_datetime(row[SELL_DATE])
+            row[FEE] = float(row[FEE])
             comp[code] = row
             
     return comp
+
+def load_comps(filenames, names):
+    ''' Takes csv comp filename and readable name and returns `comps` object '''
+    return {name: {'comp': load_comp(filename)} for filename, name in zip(filenames, names)}
 
 def get_cash(comp):        
     ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
     daily = comp['daily'].copy().reset_index()
     
+    # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
     cash = INITIAL_CASH*np.ones(len(daily))
     
     for code, data in comp['comp'].items():
-        units, price, buy_date, sell_date, sell_price = data
-
-        held_dates = daily[(daily.date >= buy_date) & (daily.date <= sell_date)].date
-        cash -= units*price*np.where(daily.date.isin(held_dates), 1, 0)
+        # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
+        cash -= data[UNITS]*data[BUY_PRICE]*np.where(daily.date.isin(daily[(daily.date >= data[BUY_DATE])].date), 1, 0)
+        
+        # cash add money back from selling shares forever [20_000, 18_000, 21_000, 21_000] (+3000)
+        cash -= data[UNITS]*data[SELL_PRICE]*np.where(daily.date.isin(daily[(daily.date >= data[SELL_DATE])].date), 1, 0)
         
     return cash
 
@@ -105,7 +113,7 @@ def plot_shares(daily, SHARES, filename='single_stocks', save=False, scale=1):
         tmp = daily.reset_index(drop=True)
         ind = tmp[tmp[code] > 0].index
         x = np.arange(min(ind)-1, max(ind)+1)
-        ax.plot(x, [1] + list(tmp[tmp[code] > 0][code] / SHARES[code][PRICE]), label=f'{code}', alpha=0.9, lw=LW)
+        ax.plot(x, [1] + list(tmp[tmp[code] > 0][code] / SHARES[code][BUY_PRICE]), label=f'{code}', alpha=0.9, lw=LW)
 
     x = np.arange(len(daily))
     ax.plot(x, np.ones(len(daily)), linestyle='--', lw=LW, c='black', alpha=0.7)
