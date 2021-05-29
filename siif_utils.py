@@ -18,54 +18,113 @@ plt.rc('legend', fontsize=MED)   # legend fontsize
 plt.rc('font', size=LARGE)         # controls default text sizes
 
 TRADING_DAYS = 252
-UNITS, BUY_PRICE, BUY_DATE, SELL_DATE, SELL_PRICE, FEE = 0, 1, 2, 3, 4, 5
 INITIAL_CASH = 20_000
 TOMORROW = dt.datetime.today().date() + dt.timedelta(days=1)
 
-CODE = 0
-def load_comp(filename):
-    ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
-    comp = {}
-    with open('./comps/'+filename+'.csv', newline='') as f:
-        next(csv.reader(f, delimiter=' ', quotechar='|'))
-        reader = csv.reader(f, delimiter=' ', quotechar='|')
-        for row in reader:
-            row = row[0].split(',')
-            code = row[CODE]
-            row = row[1:]
-            
-            # Convert units and prices to int/float
-            row[UNITS] = int(row[UNITS])
-            row[BUY_PRICE] = float(row[BUY_PRICE])
-            row[SELL_PRICE] = float(row[SELL_PRICE])
-            row[BUY_DATE] = row[BUY_DATE].split('/')[::-1]
-            row[BUY_DATE][2] = f'{int(row[BUY_DATE][2]):02d}'
-            row[BUY_DATE] = '-'.join(row[BUY_DATE])
-            row[SELL_DATE] = TOMORROW if row[SELL_DATE] == '-1' else pd.to_datetime(row[SELL_DATE])
-            row[FEE] = float(row[FEE])
-            comp[code] = row
-            
-    return comp
 
-def load_comps(filenames, names):
-    ''' Takes csv comp filename and readable name and returns `comps` object '''
-    return {name: {'comp': load_comp(filename)} for filename, name in zip(filenames, names)}
+class Share:
+    ''' Holds the meta data of one share in a composition '''
+    
+    def __init__(self, meta_data):
+        # meta_data structure: [code, units, buy_price, sell_price, buy_date, sell_date, buy_fee, sell_fee]
+        self.code = meta_data[0]
+        self.units = int(meta_data[1])
+        self.buy_price  = float(meta_data[2])
+        self.sell_price = None if meta_data[3] == '-1' else float(meta_data[3])
+        self.buy_date  = pd.to_datetime(meta_data[4], format='%d/%m/%Y').date()
+        self.sell_date = TOMORROW if meta_data[5] == '-1' else pd.to_datetime(meta_data[5], format='%d/%m/%Y')
+        self.buy_fee  = float(meta_data[6])
+        self.sell_fee = float(meta_data[7])
+        
+    def __str__(self):
+        return self.__repr__()
+        
+    def __repr__(self):
+        return f'{self.code}'
 
-def get_cash(comp):        
-    ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
-    daily = comp['daily'].copy().reset_index()
+class Comp:
+    ''' Represents a portfolio composition 
+    name:            name of composition (shows up on graphs)
+    filename:        filename for CSV file containing composition meta data
+    shares:          list of Share objects
+    daily:           pandas dataframe of daily close price for each share in composition
+    portfolio_value: numpy array of net portfolio value over time'''
     
-    # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
-    cash = INITIAL_CASH*np.ones(len(daily))
+    def __init__(self, name, filename):
+        self.name = name
+        self.filename = filename
+        self.shares = self.load_comp()
+        self.daily = self.load_data()
+        self.portfolio_value = self.portfolio_value()
+        
+    def load_comp(self):
+        ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
+        shares = []
+        with open('./comps/'+self.filename+'.csv', newline='') as f:
+            next(csv.reader(f, delimiter=' ', quotechar='|'))
+            reader = csv.reader(f, delimiter=' ', quotechar='|')
+            for row in reader:
+                shares.append(Share(row[0].split(','))) 
+                
+        return shares
+                
+    def load_data(self, start='2021-04-23', end='3000-01-01', verbose=True):
+        ''' Takes list of shares and returns data from the start date '''
+        if verbose:
+            print('Loading', self.name)
+            
+        daily = pd.DataFrame({'date': []})
+        codes = [share.code for share in self.shares]
+        codes = tqdm(codes) if verbose else codes
+        
+        # Load data
+        for code in codes:
+            df = Ticker(f'{code}.AX').history(start=start, end=end).reset_index()[['date', 'close']]
+            df.columns = ['date', code]
+            daily = pd.merge(daily, df, on='date', how='outer')
+            
+        daily['date'] = pd.to_datetime(daily.date)
+        daily = daily.sort_values('date').ffill().set_index('date')
+        
+        # Set 0s where shares were not owned
+        for i, share in enumerate(self.shares):
+            daily.iloc[:daily.index.to_list().index(share.buy_date), i] = 0
+            if share.sell_date != TOMORROW:
+                daily.iloc[daily.index.to_list().index(share.sell_date):, i] = 0
+
+        return daily
     
-    for code, data in comp['comp'].items():
-        # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
-        cash -= data[UNITS]*data[BUY_PRICE]*np.where(daily.date.isin(daily[(daily.date >= data[BUY_DATE])].date), 1, 0)
+    def portfolio_value(self):
+        ''' Calculate the portfolio value for each day '''
+        units = np.array([share.units for share in self.shares])
+        return self.daily.to_numpy() @ units + self.get_cash()
+    
+    def get_cash(self):        
+        ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
+        daily = self.daily.copy().reset_index()
+
+        # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
+        cash = INITIAL_CASH*np.ones(len(daily))
+
+        for share in self.shares:
+            held_onwards = np.where(daily.date >= share.buy_date , 1, 0)
+            sold_onwards = np.where(daily.date >= share.sell_date, 1, 0)
+            # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
+            cash -= held_onwards * (share.units*share.buy_price + share.buy_fee)
+
+            # cash add money back from selling shares forever [20_000, 18_000, 21_000, 21_000] (+3000)
+            if share.sell_date != TOMORROW:
+                cash += sold_onwards * (share.units*share.sell_price - share.sell_fee)
+
+        return cash
+                
+    def __str__(self):
+        return self.__repr__()
         
-        # cash add money back from selling shares forever [20_000, 18_000, 21_000, 21_000] (+3000)
-        cash -= data[UNITS]*data[SELL_PRICE]*np.where(daily.date.isin(daily[(daily.date >= data[SELL_DATE])].date), 1, 0)
-        
-    return cash
+    def __repr__(self):
+        return f'{self.name}: {self.shares}'
+
+################################ Plotting functions ################################
 
 def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     """
@@ -86,43 +145,26 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     ax.xaxis.set_major_formatter(FuncFormatter(format_date))
     ax.set_xlabel(label)
     fig.autofmt_xdate()
-    
 
-def load_data(codes, start='2020-07-27', end='3000-01-01', verbose=True):
-    ''' Takes list of shares and returns data from the start date '''
-    daily = pd.DataFrame({'date': []})
-
-    codes = tqdm(codes) if verbose else codes
-    print('Loading Data') if verbose else None
-    for code in codes:
-        df = Ticker(f'{code}.AX').history(start=start, end=end).reset_index()
-
-        df = df[['date', 'close']]
-        df.columns = ['date', code]
-        daily = pd.merge(daily, df, on='date', how='outer').sort_values('date')
-
-    daily['date'] = pd.to_datetime(daily.date)
-    daily = daily.ffill().set_index('date')
-    return daily
-
-def plot_shares(daily, SHARES, filename='single_stocks', save=False, scale=1):
-    ''' Plots each individual share's value '''
+def plot_shares(comp, filename='single_stocks', save=False, scale=1):
+    ''' Plots each individual share's value for each share in composition '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
-    for code in daily:
-        tmp = daily.reset_index(drop=True)
-        ind = tmp[tmp[code] > 0].index
+    for share in comp.shares:
+        tmp = comp.daily.reset_index(drop=True)
+        ind = tmp[tmp[share.code] > 0].index
         x = np.arange(min(ind)-1, max(ind)+1)
-        ax.plot(x, [1] + list(tmp[tmp[code] > 0][code] / SHARES[code][BUY_PRICE]), label=f'{code}', alpha=0.9, lw=LW)
+        ax.plot(x, [1] + list(tmp[tmp[share.code] > 0][share.code] / share.buy_price), label=f'{share.code}', alpha=0.9, lw=LW)
 
-    x = np.arange(len(daily))
-    ax.plot(x, np.ones(len(daily)), linestyle='--', lw=LW, c='black', alpha=0.7)
+    x = np.arange(len(comp.daily))
+    ax.plot(x, np.ones(len(comp.daily)), linestyle='--', lw=LW, c='black', alpha=0.7)
     sns.despine()
     ax.set_title('Single Stock Performance', fontsize=LARGE)
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
-    plt.legend(frameon=False, fontsize=SMALL)
-    equidate_ax(fig, ax, daily.index)
+    ax.set_xlim(-0.05*max(x), 1.15*max(x))
+    plt.legend(frameon=False, fontsize=SMALL, loc='right')
+    equidate_ax(fig, ax, comp.daily.index)
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
@@ -131,25 +173,27 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ''' Plots the performance of each comp '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
-    for comp_name, comp in comps.items():
-        daily = comp['daily']
-        ind = daily.reset_index(drop=True).index
-        x = np.arange(min(ind)-1, max(ind)+1)
-        ax.plot(x, [1] + list(comp['portfolio_value'] / INITIAL_CASH), label=comp_name, alpha=0.9, lw=1.5*LW)
+    ind = comps[0].daily.reset_index(drop=True).index
+    x = np.arange(min(ind)-1, max(ind)+1)
+    for comp in comps:
+        ax.plot(x, [1] + list(comp.portfolio_value / INITIAL_CASH), label=comp.name, alpha=0.9, lw=1.5*LW)
 
-    x = np.arange(-1, len(daily))
+    x = np.arange(-1, len(ind))
     ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
     sns.despine()
     ax.set_title('Strategy Performance', fontsize=LARGE)
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL)
-    equidate_ax(fig, ax, daily.index)
+    equidate_ax(fig, ax, comps[0].daily.index)
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
     
 def plot_profit(daily, PROFIT):
+    ''' Deprecated '''
+    raise(ImplementationError)
+    
     fig, ax = plt.subplots(figsize=(20, 10), tight_layout=True)
 
     ax.plot(np.arange(len(daily)), PROFIT, lw=LW, c='green')
@@ -163,6 +207,9 @@ def plot_profit(daily, PROFIT):
     plt.show()
     
 def plot_returns(daily, PROFIT):
+    ''' Deprecated '''
+    raise(ImplementationError)
+    
     fig, ax = plt.subplots(figsize=(20, 10), tight_layout=True)
 
     profits = np.diff(PROFIT)
@@ -177,6 +224,8 @@ def plot_returns(daily, PROFIT):
     ax.set_ylabel('Daily Return ($)', fontsize=MED)
     equidate_ax(fig, ax, daily.index)
     plt.show()
+    
+################################ Modern Portfolio Theory ################################
     
 def mean_variance_optimisation(returns, b_val=0.1, risk_free=False, interest_rate=0):
     ''' 
@@ -213,7 +262,7 @@ def mean_variance_optimisation(returns, b_val=0.1, risk_free=False, interest_rat
     
     return problem.value, w.value.round(10)
 
-#### SENDING EMAILS
+################################ Sending Emails ################################
 from email.mime.image import MIMEImage
 from email.header import Header
 import os
