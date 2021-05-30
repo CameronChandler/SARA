@@ -3,3 +3,4 @@ data/
 comps/TEST.csv
 .ipynb_checkpoints/
 main/
+__pycache__/

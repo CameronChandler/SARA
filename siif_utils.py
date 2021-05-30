@@ -22,6 +22,20 @@ INITIAL_CASH = 20_000
 TOMORROW = dt.datetime.today().date() + dt.timedelta(days=1)
 
 
+class CashFlow:
+    ''' Holds the meta data of one share in a composition '''
+    
+    def __init__(self, meta_data):
+        # meta_data structure: [CASH_FLOW, _, dollar amount, _, date, _, _, _]
+        self.cash_flow  = float(meta_data[2])
+        self.date  = pd.to_datetime(meta_data[4], format='%d/%m/%Y').date()
+        
+    def __str__(self):
+        return self.__repr__()
+        
+    def __repr__(self):
+        return f'{self.date}: ${self.cash_flow}'
+
 class Share:
     ''' Holds the meta data of one share in a composition '''
     
@@ -53,22 +67,28 @@ class Comp:
     def __init__(self, name, filename):
         self.name = name
         self.filename = filename
-        self.shares = self.load_comp()
+        self.shares, self.cash_flows = self.load_comp()
         self.daily = self.load_data()
-        self.portfolio_value = self.portfolio_value()
+        self.portfolio_value = self.get_portfolio_value()
+        self.returns = self.get_returns()
         
     def load_comp(self):
         ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
         shares = []
+        cash_flows = []
         with open('./comps/'+self.filename+'.csv', newline='') as f:
             next(csv.reader(f, delimiter=' ', quotechar='|'))
             reader = csv.reader(f, delimiter=' ', quotechar='|')
             for row in reader:
-                shares.append(Share(row[0].split(','))) 
+                meta_data = row[0].split(',')
+                if meta_data[0] == 'CASH_FLOW':
+                    cash_flows.append(CashFlow(meta_data))
+                else:
+                    shares.append(Share(meta_data)) 
                 
-        return shares
-                
-    def load_data(self, start='2021-04-23', end='3000-01-01', verbose=True):
+        return shares, cash_flows
+
+    def load_data(self, start='2020-07-27', end='3000-01-01', verbose=True):
         ''' Takes list of shares and returns data from the start date '''
         if verbose:
             print('Loading', self.name)
@@ -94,21 +114,31 @@ class Comp:
 
         return daily
     
-    def portfolio_value(self):
+    def get_portfolio_value(self, end_of_day=False):
         ''' Calculate the portfolio value for each day '''
         units = np.array([share.units for share in self.shares])
-        return self.daily.to_numpy() @ units + self.get_cash()
+        return pd.Series(self.daily.to_numpy() @ units + self.get_cash(end_of_day), index=self.daily.index)
     
-    def get_cash(self):        
+    def get_cash(self, end_of_day):        
         ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
         daily = self.daily.copy().reset_index()
 
+        # Initialise starting balance
         # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
-        cash = INITIAL_CASH*np.ones(len(daily))
+        cash = self.cash_flows[0].cash_flow * np.ones(len(daily))
+
+        for cash_flow in self.cash_flows[1:]:
+            # When should cash_flow count
+            if end_of_day:
+                effective_period = np.where(daily['date'] >  pd.Timestamp(cash_flow.date) , 1, 0)
+            else:
+                effective_period = np.where(daily['date'] >= pd.Timestamp(cash_flow.date) , 1, 0)
+
+            cash += cash_flow.cash_flow * effective_period
 
         for share in self.shares:
-            held_onwards = np.where(daily.date >= share.buy_date , 1, 0)
-            sold_onwards = np.where(daily.date >= share.sell_date, 1, 0)
+            held_onwards = np.where(daily['date'] >= pd.Timestamp(share.buy_date) , 1, 0)
+            sold_onwards = np.where(daily['date'] >= pd.Timestamp(share.sell_date), 1, 0)
             # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
             cash -= held_onwards * (share.units*share.buy_price + share.buy_fee)
 
@@ -117,7 +147,45 @@ class Comp:
                 cash += sold_onwards * (share.units*share.sell_price - share.sell_fee)
 
         return cash
-                
+    
+    def get_returns(self):
+        ''' Calculate portfolio returns at each day. Accounts for cash injection/withdrawal
+        Method from https://www.fool.com/about/how-to-calculate-investment-returns/
+        
+        Data looks like:
+        date:                       date
+        end_of_day_portfolio_value: units @ price (before cash flow added)
+        cash_flow:                  cash_flow added at end of day
+        value_after_cash_flow:      sum above two
+        last_base:                  end_of_day_portfolio at beginning of current holding period
+        cum_HPR:                    cumulative return for current holding period only
+        HPR:                        1 if not end of current HP, if at end, represents return for that HP
+        cum_return:                 cumulative total HPRs
+        return:                     final calculated return on investment at any given time
+        '''
+        data = pd.DataFrame(self.get_portfolio_value(end_of_day=True), 
+            columns=['end_of_day_portfolio_value'],
+            index=self.daily.index)
+
+        data['cash_flow'] = 0
+        for cash_flow in self.cash_flows[1:]:
+            data.loc[cash_flow.date, 'cash_flow'] = cash_flow.cash_flow
+
+        data['value_after_cash_flow'] = data['end_of_day_portfolio_value'] + data['cash_flow']
+        data['last_base'] = np.where(data['cash_flow'] != 0, data['value_after_cash_flow'], np.nan)
+        data['last_base'][0] = data['end_of_day_portfolio_value'][0]
+        data['last_base'] = data['last_base'].ffill()
+
+        # Holding Period Return
+        data['cum_HPR'] =  data['end_of_day_portfolio_value'] / data['last_base'].shift()
+        data['cum_HPR'][0] = 1
+        data['HPR'] = np.where(data['cash_flow'] != 0, data['cum_HPR'], 1)
+        data['cum_return'] = np.cumprod(data['HPR'])
+        data['return'] = np.where(data['cash_flow'] == 0,
+                                  data['cum_HPR']*data['cum_return'], data['HPR']) 
+
+        return data['return']
+
     def __str__(self):
         return self.__repr__()
         
@@ -146,38 +214,24 @@ def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
     ax.set_xlabel(label)
     fig.autofmt_xdate()
 
-def plot_shares(comp, filename='single_stocks', save=False, scale=1):
-    ''' Plots each individual share's value for each share in composition '''
-    fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
-    
-    for share in comp.shares:
-        tmp = comp.daily.reset_index(drop=True)
-        ind = tmp[tmp[share.code] > 0].index
-        x = np.arange(min(ind)-1, max(ind)+1)
-        ax.plot(x, [1] + list(tmp[tmp[share.code] > 0][share.code] / share.buy_price), label=f'{share.code}', alpha=0.9, lw=LW)
-
-    x = np.arange(len(comp.daily))
-    ax.plot(x, np.ones(len(comp.daily)), linestyle='--', lw=LW, c='black', alpha=0.7)
-    sns.despine()
-    ax.set_title('Single Stock Performance', fontsize=LARGE)
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Relative Value')
-    ax.set_xlim(-0.05*max(x), 1.15*max(x))
-    plt.legend(frameon=False, fontsize=SMALL, loc='right')
-    equidate_ax(fig, ax, comp.daily.index)
-    if save:
-        plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
-    plt.show()
-    
 def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ''' Plots the performance of each comp '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
-    ind = comps[0].daily.reset_index(drop=True).index
+    rs = comps[0].returns
+    start = rs[rs.diff() != 0].index[1]
+    
+    ind = rs[start:].reset_index().index
     x = np.arange(min(ind)-1, max(ind)+1)
     for comp in comps:
-        ax.plot(x, [1] + list(comp.portfolio_value / INITIAL_CASH), label=comp.name, alpha=0.9, lw=1.5*LW)
-
+        ax.plot(x, [1] + comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=1.5*LW)
+        
+    # Plot Bank
+    rate = 0.03
+    cum_balance = [1] + list(np.cumprod((1+rate)**(1/TRADING_DAYS) * np.ones(len(x)-1)))
+    ax.plot(x, cum_balance, label='Bank (3% p.a.)', alpha=0.9, lw=1.5*LW)
+    
+    # Aesthetics
     x = np.arange(-1, len(ind))
     ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
     sns.despine()
@@ -185,7 +239,36 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL)
-    equidate_ax(fig, ax, comps[0].daily.index)
+    equidate_ax(fig, ax, comps[0].returns.index)
+    if save:
+        plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
+    plt.show()
+    
+
+def plot_shares(comp, filename='single_stocks', save=False, scale=1):
+    ''' Plots each individual share's value for each share in composition '''
+    fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
+    
+    start = comp.daily[comp.daily.any(1)].index[0]
+    start_ind = comp.daily.index.to_list().index(start)
+    
+    for share in comp.shares:
+        tmp = comp.daily.reset_index(drop=True)
+        held = tmp[tmp[share.code] > 0]
+        x = np.arange(min(held.index)-1, max(held.index)+1)
+        ax.plot(x, [1] + (held[share.code] / share.buy_price).to_list(), 
+                label=share.code, alpha=0.9, lw=LW)
+
+    # Aesthetics
+    x = np.arange(start_ind-1, start_ind + len(comp.daily[start:]))
+    ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
+    sns.despine()
+    ax.set_title('Single Stock Performance', fontsize=LARGE)
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Relative Value')
+    ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
+    plt.legend(frameon=False, fontsize=SMALL, loc='right')
+    equidate_ax(fig, ax, comp.daily.index)
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
