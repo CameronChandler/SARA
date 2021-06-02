@@ -21,6 +21,8 @@ TRADING_DAYS = 252
 INITIAL_CASH = 20_000
 TOMORROW = dt.datetime.today().date() + dt.timedelta(days=1)
 
+TEST, PROD = 0, 1
+SIIF = 1
 
 class CashFlow:
     ''' Holds the meta data of one share in a composition '''
@@ -380,3 +382,23 @@ def send_email(msg, gmail_user, gmail_pwd, to):
     mailServer.login(gmail_user, gmail_pwd)
     mailServer.sendmail(gmail_user, to, msg.as_string())
     mailServer.quit()
+    
+################################ Logging ################################  
+def log(typ, running_level, name='', verbose=True, freq='WEEKLY'):
+    ''' Log the emailing process. Log to log.txt if running_level is PROD, print if verbose is True '''
+    # What is the message
+    if typ == 'begin':
+        msg = freq + '\n=== Begin running at ' + str(dt.datetime.now()) + ' ====\n'
+    elif typ == 'success':
+        msg = f'Email to {name.rjust(10)} succeeded at ' + str(dt.datetime.now()) + '\n'
+    elif typ == 'failure':
+        msg = f'Email to {name.rjust(10)} failed at ' + str(dt.datetime.now()) + '\n'
+    elif typ == 'end':
+        msg = '==== Completed emailing at ' + str(dt.datetime.now()) + ' ====\n\n'
+    
+    # Where to log
+    if running_level == PROD:
+        with open('log.txt', 'a') as f:
+            f.write(msg)
+    if verbose:
+        print(msg)
