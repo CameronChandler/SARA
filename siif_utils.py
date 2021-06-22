@@ -6,7 +6,6 @@ import datetime as dt
 from matplotlib.ticker import FuncFormatter
 from yahooquery import Ticker
 from tqdm import tqdm
-import cvxpy as cp
 import csv
 
 SMALL, MED, LARGE, LW = 18, 24, 30, 2
@@ -90,7 +89,7 @@ class Comp:
                 
         return shares, cash_flows
 
-    def load_data(self, start='2020-07-27', end='3000-01-01', verbose=True):
+    def load_data(self, start='2020-07-27', end=TOMORROW, verbose=True):
         ''' Takes list of shares and returns data from the start date '''
         if verbose:
             print('Loading', self.name)
@@ -105,7 +104,7 @@ class Comp:
             df.columns = ['date', code]
             daily = pd.merge(daily, df, on='date', how='outer')
             
-        daily['date'] = pd.to_datetime(daily.date)
+        daily['date'] = pd.to_datetime(daily.date).dt.date
         daily = daily.sort_values('date').ffill().set_index('date')
         
         # Set 0s where shares were not owned
@@ -132,15 +131,15 @@ class Comp:
         for cash_flow in self.cash_flows[1:]:
             # When should cash_flow count
             if end_of_day:
-                effective_period = np.where(daily['date'] >  pd.Timestamp(cash_flow.date) , 1, 0)
+                effective_period = np.where(daily['date'] >  cash_flow.date , 1, 0)
             else:
-                effective_period = np.where(daily['date'] >= pd.Timestamp(cash_flow.date) , 1, 0)
+                effective_period = np.where(daily['date'] >= cash_flow.date , 1, 0)
 
             cash += cash_flow.cash_flow * effective_period
 
         for share in self.shares:
-            held_onwards = np.where(daily['date'] >= pd.Timestamp(share.buy_date) , 1, 0)
-            sold_onwards = np.where(daily['date'] >= pd.Timestamp(share.sell_date), 1, 0)
+            held_onwards = np.where(daily['date'] >= share.buy_date , 1, 0)
+            sold_onwards = np.where(daily['date'] >= share.sell_date, 1, 0)
             # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
             cash -= held_onwards * (share.units*share.buy_price + share.buy_fee)
 
@@ -325,6 +324,8 @@ def mean_variance_optimisation(returns, b_val=0.1, risk_free=False, interest_rat
         problem.value - Scalar, representing variance (i.e. squared volatility) of optimal asset allocation
         w.value       - Vector, representing optimal asset allocation 
     '''
+    import cvxpy as cp
+
     μ = returns.mean().to_numpy() * TRADING_DAYS
     Σ = returns.cov().to_numpy() * TRADING_DAYS
     if risk_free:
