@@ -241,7 +241,7 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL)
-    equidate_ax(fig, ax, comps[0].returns.index)
+    equidate_ax(fig, ax, comps[0].returns[start:].index)
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
