@@ -69,6 +69,7 @@ class Comp:
         self.name = name
         self.filename = filename
         self.shares, self.cash_flows = self.load_comp()
+        self.curr_shares = [share for share in self.shares if share.sell_date == TOMORROW]
         self.daily = self.load_data()
         self.portfolio_value = self.get_portfolio_value()
         self.returns = self.get_returns()
@@ -183,7 +184,7 @@ class Comp:
         data['HPR'] = np.where(data['cash_flow'] != 0, data['cum_HPR'], 1)
         data['cum_return'] = np.cumprod(data['HPR'])
         data['return'] = np.where(data['cash_flow'] == 0,
-                                  data['cum_HPR']*data['cum_return'], data['HPR']) 
+                                  data['cum_HPR']*data['cum_return'], data['cum_return']) 
 
         return data['return']
 
@@ -191,7 +192,7 @@ class Comp:
         return self.__repr__()
         
     def __repr__(self):
-        return f'{self.name}: {self.shares}'
+        return f'{self.name}: {self.curr_shares}'
 
 ################################ Plotting functions ################################
 
@@ -253,7 +254,7 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     start = comp.daily[comp.daily.any(1)].index[0]
     start_ind = comp.daily.index.to_list().index(start)
     
-    for share in comp.shares:
+    for share in comp.curr_shares:
         tmp = comp.daily.reset_index(drop=True)
         held = tmp[tmp[share.code] > 0]
         x = np.arange(min(held.index)-1, max(held.index)+1)
