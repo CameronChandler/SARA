@@ -26,30 +26,33 @@ SIIF = 1
 class CashFlow:
     ''' Holds the meta data of one share in a composition '''
     
-    def __init__(self, meta_data):
-        # meta_data structure: [CASH_FLOW, _, dollar amount, _, date, _, _, _]
-        self.cash_flow  = float(meta_data[2])
-        self.date  = pd.to_datetime(meta_data[4], format='%d/%m/%Y').date()
+    def __init__(self, row):
+        self.cash_flow = float(row['price'])
+        self.date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
         
     def __str__(self):
         return self.__repr__()
         
     def __repr__(self):
         return f'{self.date}: ${self.cash_flow}'
-
+    
 class Share:
     ''' Holds the meta data of one share in a composition '''
     
-    def __init__(self, meta_data):
-        # meta_data structure: [code, units, buy_price, sell_price, buy_date, sell_date, buy_fee, sell_fee]
-        self.code = meta_data[0]
-        self.units = int(meta_data[1])
-        self.buy_price  = float(meta_data[2])
-        self.sell_price = None if meta_data[3] == '-1' else float(meta_data[3])
-        self.buy_date  = pd.to_datetime(meta_data[4], format='%d/%m/%Y').date()
-        self.sell_date = TOMORROW if meta_data[5] == '-1' else pd.to_datetime(meta_data[5], format='%d/%m/%Y')
-        self.buy_fee  = float(meta_data[6])
-        self.sell_fee = float(meta_data[7])
+    def __init__(self, row, dates):
+        self.code = row['code']
+        self.timeline = pd.DataFrame({'units': 0, 'transaction_price': 0, 'fees': 0}, index=dates)
+        
+        # Merge in price data
+        price = Ticker(f'{self.code}.AX').history(start=self.timeline.index[0], end=TOMORROW).reset_index()[['date', 'close']]
+        price.columns = ['date', 'price']
+        self.timeline = pd.merge(self.timeline, price, on='date', how='left').set_index('date')
+        
+    def add_info(self, row):
+        date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
+        self.timeline.loc[date:, 'units'] += int(row['units'])
+        self.timeline.loc[date, 'fees'] = float(row['fee'])
+        self.timeline.loc[date, 'transaction_price'] = float(row['price'])
         
     def __str__(self):
         return self.__repr__()
@@ -69,84 +72,71 @@ class Comp:
         self.name = name
         self.filename = filename
         self.shares, self.cash_flows = self.load_comp()
-        self.curr_shares = [share for share in self.shares if share.sell_date == TOMORROW]
-        self.daily = self.load_data()
+        self.curr_shares = [share for share in self.shares if share.timeline.iloc[-1]['units'] != 0]
         self.portfolio_value = self.get_portfolio_value()
         self.returns = self.get_returns()
         
     def load_comp(self):
         ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
-        shares = []
+        # First, work out when the portfolio starts
+        min_date = TOMORROW
+        with open('./comps/'+self.filename+'.csv', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if not row['code']:
+                    break
+                min_date = min(min_date, pd.to_datetime(row['date'], format='%d/%m/%Y').date())
+                
+        dates = Ticker('NDQ.AX').history(start=min_date, end=TOMORROW).reset_index()['date']
+        
+        # Then parse the data
+        shares = {}
         cash_flows = []
         with open('./comps/'+self.filename+'.csv', newline='') as f:
-            next(csv.reader(f, delimiter=' ', quotechar='|'))
-            reader = csv.reader(f, delimiter=' ', quotechar='|')
+            reader = csv.DictReader(f)
             for row in reader:
-                meta_data = row[0].split(',')
-                if meta_data[0] == 'CASH_FLOW':
-                    cash_flows.append(CashFlow(meta_data))
+                code = row['code']
+                if not code:
+                    break
+                elif code == 'CASH_FLOW':
+                    cash_flows.append(CashFlow(row))
                 else:
-                    shares.append(Share(meta_data)) 
+                    if code not in shares:
+                        shares[code] = Share(row, dates)
+                    shares[code].add_info(row)
                 
-        return shares, cash_flows
-
-    def load_data(self, start='2020-07-27', end=TOMORROW, verbose=True):
-        ''' Takes list of shares and returns data from the start date '''
-        if verbose:
-            print('Loading', self.name)
-            
-        daily = pd.DataFrame({'date': []})
-        codes = [share.code for share in self.shares]
-        codes = tqdm(codes) if verbose else codes
-        
-        # Load data
-        for code in codes:
-            df = Ticker(f'{code}.AX').history(start=start, end=end).reset_index()[['date', 'close']]
-            df.columns = ['date', code]
-            daily = pd.merge(daily, df, on='date', how='outer')
-            
-        daily['date'] = pd.to_datetime(daily.date).dt.date
-        daily = daily.sort_values('date').ffill().set_index('date')
-        
-        # Set 0s where shares were not owned
-        for i, share in enumerate(self.shares):
-            daily.iloc[:daily.index.to_list().index(share.buy_date), i] = 0
-            if share.sell_date != TOMORROW:
-                daily.iloc[daily.index.to_list().index(share.sell_date):, i] = 0
-
-        return daily
+        return list(shares.values()), cash_flows
     
     def get_portfolio_value(self, end_of_day=False):
         ''' Calculate the portfolio value for each day '''
-        units = np.array([share.units for share in self.shares])
-        return pd.Series(self.daily.to_numpy() @ units + self.get_cash(end_of_day), index=self.daily.index)
+        total_share_value = pd.Series(0, index=self.shares[0].timeline.index)
+        for share in self.shares:
+            total_share_value += share.timeline['price'] * share.timeline['units']
+            
+        return total_share_value + self.get_cash(end_of_day, total_share_value.index)
     
-    def get_cash(self, end_of_day):        
+    def get_cash(self, end_of_day, dates):        
         ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
-        daily = self.daily.copy().reset_index()
-
         # Initialise starting balance
         # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
-        cash = self.cash_flows[0].cash_flow * np.ones(len(daily))
+        cash = pd.Series(self.cash_flows[0].cash_flow, index=dates)
 
         for cash_flow in self.cash_flows[1:]:
             # When should cash_flow count
             if end_of_day:
-                effective_period = np.where(daily['date'] >  cash_flow.date , 1, 0)
+                effective_period = np.where(dates >  cash_flow.date , 1, 0)
             else:
-                effective_period = np.where(daily['date'] >= cash_flow.date , 1, 0)
+                effective_period = np.where(dates >= cash_flow.date , 1, 0)
 
             cash += cash_flow.cash_flow * effective_period
 
         for share in self.shares:
-            held_onwards = np.where(daily['date'] >= share.buy_date , 1, 0)
-            sold_onwards = np.where(daily['date'] >= share.sell_date, 1, 0)
-            # cash subtract cost from cash forever [20_000, 18_000, 18_000, 18_000] 1xD (-2000)
-            cash -= held_onwards * (share.units*share.buy_price + share.buy_fee)
-
-            # cash add money back from selling shares forever [20_000, 18_000, 21_000, 21_000] (+3000)
-            if share.sell_date != TOMORROW:
-                cash += sold_onwards * (share.units*share.sell_price - share.sell_fee)
+            # Add units_diff column
+            share.timeline['units_diff'] = share.timeline['units'].diff().fillna(share.timeline['units'])
+            
+            for date, row in share.timeline[share.timeline.units_diff != 0].iterrows():
+                # Change cash 'from then onwards'
+                cash.loc[date:] += -row['units_diff']*row['transaction_price'] - row['fees']
 
         return cash
     
@@ -167,7 +157,7 @@ class Comp:
         '''
         data = pd.DataFrame(self.get_portfolio_value(end_of_day=True), 
             columns=['end_of_day_portfolio_value'],
-            index=self.daily.index)
+            index=self.portfolio_value.index)
 
         data['cash_flow'] = 0
         for cash_flow in self.cash_flows[1:]:
@@ -246,23 +236,20 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
     
-
 def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     ''' Plots each individual share's value for each share in composition '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
-    start = comp.daily[comp.daily.any(1)].index[0]
-    start_ind = comp.daily.index.to_list().index(start)
+    start = comp.portfolio_value.index[0]
     
     for share in comp.curr_shares:
-        tmp = comp.daily.reset_index(drop=True)
-        held = tmp[tmp[share.code] > 0]
+        tmp = share.timeline.reset_index(drop=True)
+        held = tmp[tmp.units > 0]
         x = np.arange(min(held.index)-1, max(held.index)+1)
-        ax.plot(x, [1] + (held[share.code] / share.buy_price).to_list(), 
-                label=share.code, alpha=0.9, lw=LW)
+        ax.plot(x, [1] + (held.price / held.transaction_price.iloc[0]).to_list(), label=share.code, alpha=0.9, lw=LW)
 
     # Aesthetics
-    x = np.arange(start_ind-1, start_ind + len(comp.daily[start:]))
+    x = np.arange(-1, len(comp.portfolio_value))
     ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
     sns.despine()
     ax.set_title('Single Stock Performance', fontsize=LARGE)
@@ -270,7 +257,7 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     ax.set_ylabel('Relative Value')
     ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
     plt.legend(frameon=False, fontsize=SMALL, loc='right')
-    equidate_ax(fig, ax, comp.daily.index)
+    equidate_ax(fig, ax, comp.portfolio_value.index)
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
