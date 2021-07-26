@@ -33,7 +33,7 @@ log('begin', running_level=RUNNING_LEVEL)
 ####################################### STEP 1. PREPARE DATA ########################################
 
 # Composition Name: Composition CSV file
-test_comps = {'SIIF Current': 'TEST'}
+test_comps = {'SIIF Current': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
 siif_comps = {'SIIF Current': 'SIIF', 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT', 'NDQ': 'NDQ', 'A200': 'A200',}
 names = test_comps if PORTFOLIO == TEST else siif_comps
 # ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `comps` FIRST

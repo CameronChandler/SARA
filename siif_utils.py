@@ -27,14 +27,20 @@ class CashFlow:
     ''' Holds the meta data of one share in a composition '''
     
     def __init__(self, row):
-        self.cash_flow = float(row['price'])
+        self.cash = float(row['price'])
         self.date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
         
     def __str__(self):
         return self.__repr__()
         
     def __repr__(self):
-        return f'{self.date}: ${self.cash_flow}'
+        return f'{self.date}: ${self.cash}'
+    
+class Dividend(CashFlow):
+    ''' Holds the meta data of one dividend payment '''
+    
+    def __init__(self, row):
+        super().__init__(row)
     
 class Share:
     ''' Holds the meta data of one share in a composition '''
@@ -71,7 +77,9 @@ class Comp:
     def __init__(self, name, filename):
         self.name = name
         self.filename = filename
-        self.shares, self.cash_flows = self.load_comp()
+        self.cash_flows = []
+        self.dividends  = []
+        self.shares = self.load_comp()
         self.curr_shares = [share for share in self.shares if share.timeline.iloc[-1]['units'] != 0]
         self.portfolio_value = self.get_portfolio_value()
         self.returns = self.get_returns()
@@ -91,7 +99,6 @@ class Comp:
         
         # Then parse the data
         shares = {}
-        cash_flows = []
         with open('./comps/'+self.filename+'.csv', newline='') as f:
             reader = csv.DictReader(f)
             for row in reader:
@@ -99,13 +106,15 @@ class Comp:
                 if not code:
                     break
                 elif code == 'CASH_FLOW':
-                    cash_flows.append(CashFlow(row))
+                    self.cash_flows.append(CashFlow(row))
+                elif code == 'DIVIDEND':
+                    self.dividends.append(Dividend(row))
                 else:
                     if code not in shares:
                         shares[code] = Share(row, dates)
                     shares[code].add_info(row)
                 
-        return list(shares.values()), cash_flows
+        return list(shares.values())
     
     def get_portfolio_value(self, end_of_day=False):
         ''' Calculate the portfolio value for each day '''
@@ -119,16 +128,16 @@ class Comp:
         ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
         # Initialise starting balance
         # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
-        cash = pd.Series(self.cash_flows[0].cash_flow, index=dates)
+        cash = pd.Series(self.cash_flows[0].cash, index=dates)
 
-        for cash_flow in self.cash_flows[1:]:
+        for cash_event in self.cash_flows[1:] + self.dividends:
             # When should cash_flow count
             if end_of_day:
-                effective_period = np.where(dates >  cash_flow.date , 1, 0)
+                effective_period = np.where(dates >  cash_event.date , 1, 0)
             else:
-                effective_period = np.where(dates >= cash_flow.date , 1, 0)
+                effective_period = np.where(dates >= cash_event.date , 1, 0)
 
-            cash += cash_flow.cash_flow * effective_period
+            cash += cash_event.cash * effective_period
 
         for share in self.shares:
             # Add units_diff column
@@ -161,7 +170,7 @@ class Comp:
 
         data['cash_flow'] = 0
         for cash_flow in self.cash_flows[1:]:
-            data.loc[cash_flow.date, 'cash_flow'] = cash_flow.cash_flow
+            data.loc[cash_flow.date, 'cash_flow'] = cash_flow.cash
 
         data['value_after_cash_flow'] = data['end_of_day_portfolio_value'] + data['cash_flow']
         data['last_base'] = np.where(data['cash_flow'] != 0, data['value_after_cash_flow'], np.nan)
