@@ -111,7 +111,7 @@ def generate_email(gmail_user, to, daily_changes, img_dict, name='Analyst'):
 
     msg_html = u'<p>Dear {},</p>'.format(name)
     for code, change in daily_changes:
-        msg_html += u"<p>Today {} {} {}%</p>".format(code, 'dropped' if change < 0 else 'rose', round(abs(change), 1))
+        msg_html += u"<p>Today {} <b>{} {}</b>%</p>".format(code, 'dropped' if change < 0 else 'rose', round(abs(change), 1))
     msg_html += u"<p>You may like to investigate why. "
     
     msg_html += u'<a href="https://www.google.com/search?q={}+asx">Click here to begin researching!</a></p>'.format(code)
@@ -140,7 +140,6 @@ def generate_email(gmail_user, to, daily_changes, img_dict, name='Analyst'):
 
 for i, row in ANALYSTS.iterrows():
     name, email = row['name'], row['email']
-    print(name)
     if RUNNING_LEVEL == TEST and name != TEST_NAME:
         continue
 

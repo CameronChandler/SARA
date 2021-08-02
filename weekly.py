@@ -1,7 +1,5 @@
 ############################################### TODO ################################################
-# - Refactor Daily Movements - may require email sending abstraction
 # - Add to README
-# - Improve MPT notebook
 
 import datetime as dt
 import pandas as pd
@@ -26,7 +24,7 @@ else:
         PORTFOLIO = TEST
 
 #RUNNING_LEVEL = TEST
-#PORTFOLIO = TEST     
+#PORTFOLIO = SIIF     
 ##############################################
 
 log('begin', running_level=RUNNING_LEVEL)
@@ -34,11 +32,11 @@ log('begin', running_level=RUNNING_LEVEL)
 
 # Composition Name: Composition CSV file
 test_comps = {'SIIF Current': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
-siif_comps = {'SIIF Current': 'SIIF', 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT', 'NDQ': 'NDQ', 'A200': 'A200',}
+siif_comps = {'SIIF Current': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
 names = test_comps if PORTFOLIO == TEST else siif_comps
 # ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `comps` FIRST
 comps = [Comp(name, names[name]) for name in names]
-    
+
 ######################################### STEP 2. PLOT DATA #########################################
 plot_shares(comps[0], save=True)
 plot_comps(comps, save=True)
@@ -81,24 +79,23 @@ def generate_email(gmail_user, to, img_dict, name='Analyst'):
     msg.attach(msg_alternative)
 
     msg_html = u'<p>Dear {},</p>'.format(name)
-    msg_html += u'<p>Here are the portfolio results:</p>'
+    msg_html += u'<p>Here\'s an update on the SIIF portfolio:</p>'
     
     # Strategy Comparison
     portfolio = comps[0].portfolio_value
     last_week_date = portfolio.index[-1] - pd.Timedelta(days=7)
     last_week_value = portfolio[portfolio.index <= last_week_date][-1]
     pct = round(100*(portfolio[-1]/last_week_value - 1), 1)
-    msg_html += u'<p>The current portfolio value is ${}, that is {}% {} from last week.</p>'.format(
+    msg_html += u'<p>The current portfolio value is <b>${}</b>, that is <b>{}% {}</b> from last week.</p>'.format(
         round(portfolio[-1], 2), abs(pct), "up" if pct >= 0 else "down")
     
     msg_html += '<div dir="ltr">''<img src="cid:{cid}" alt="{alt}" width="{w}" height="{h}"><br></div>'.format(
                 alt=cgi.escape('image not found', quote=True), w=GRAPH_SCALE[0], h=GRAPH_SCALE[1], **img_dict[0])
     msg_html += u"<p>The above graph compares SIIF's current portfolio against several other strategies. They are:</p>"
-    msg_html += u"<p>Using Modern Portfolio Theory to pick from original 40, using MPT to balance the SIIF portfolio, " + \
-        u"investing entirely in the NASDAQ 100, ASX 200, or into a 3% p.a. savings account.</p>"
+    msg_html += u"<p>Investing entirely in the NASDAQ 100, ASX 200, or into a 3% p.a. savings account.</p>"
     
     # SIIF Current Breakdown
-    msg_html += u"<p>Here is the breakdown of SIIF's current portfolio:</p>"
+    msg_html += u"<p>Here is the breakdown of SIIF's portfolio:</p>"
     
     msg_html += '<div dir="ltr">''<img src="cid:{cid}" alt="{alt}" width="{w}" height="{h}"><br></div>'.format(
                 alt=cgi.escape('image not found', quote=True), w=GRAPH_SCALE[0], h=GRAPH_SCALE[1], **img_dict[1])

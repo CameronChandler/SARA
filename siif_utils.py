@@ -8,7 +8,7 @@ from yahooquery import Ticker
 from tqdm import tqdm
 import csv
 
-SMALL, MED, LARGE, LW = 18, 24, 30, 2
+SMALL, MED, LARGE, LW = 18, 24, 30, 3
 plt.rc('axes', titlesize=MED)    # fontsize of the axes title
 plt.rc('axes', labelsize=MED)    # fontsize of the x and y labels
 plt.rc('xtick', labelsize=SMALL)   # fontsize of the tick labels
@@ -225,12 +225,12 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ind = rs[start:].reset_index().index
     x = np.arange(min(ind)-1, max(ind)+1)
     for comp in comps:
-        ax.plot(x, [1] + comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=1.5*LW)
+        ax.plot(x, [1] + comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=LW)
         
     # Plot Bank
     rate = 0.03
     cum_balance = [1] + list(np.cumprod((1+rate)**(1/TRADING_DAYS) * np.ones(len(x)-1)))
-    ax.plot(x, cum_balance, label='Bank (3% p.a.)', alpha=0.9, lw=1.5*LW)
+    ax.plot(x, cum_balance, label='Bank (3% p.a.)', alpha=0.9, lw=LW, zorder=-1)
     
     # Aesthetics
     x = np.arange(-1, len(ind))
