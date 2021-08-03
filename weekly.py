@@ -31,8 +31,8 @@ log('begin', running_level=RUNNING_LEVEL)
 ####################################### STEP 1. PREPARE DATA ########################################
 
 # Composition Name: Composition CSV file
-test_comps = {'SIIF Current': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
-siif_comps = {'SIIF Current': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
+test_comps = {'SIIF': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
+siif_comps = {'SIIF': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
 names = test_comps if PORTFOLIO == TEST else siif_comps
 # ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `comps` FIRST
 comps = [Comp(name, names[name]) for name in names]
