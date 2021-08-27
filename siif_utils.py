@@ -71,8 +71,11 @@ class Comp:
     name:            name of composition (shows up on graphs)
     filename:        filename for CSV file containing composition meta data
     shares:          list of Share objects
-    daily:           pandas dataframe of daily close price for each share in composition
-    portfolio_value: numpy array of net portfolio value over time'''
+    curr_shares:     list of Share objects that are currently owned
+    cash_flows:      list of CashFlow objects
+    dividends:       list of Dividend objects
+    portfolio_value: numpy array of net portfolio value over time
+    returns:         portfolio performance'''
     
     def __init__(self, name, filename):
         self.name = name
