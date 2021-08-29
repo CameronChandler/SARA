@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime as dt
 from matplotlib.ticker import FuncFormatter
+import matplotlib.dates as mdates
 from yahooquery import Ticker
 from tqdm import tqdm
 import csv
@@ -198,52 +199,33 @@ class Comp:
 
 ################################ Plotting functions ################################
 
-def equidate_ax(fig, ax, dates, fmt="%Y-%m-%d", label="Date"):
-    """
-    Sets all relevant parameters for an equidistant date-x-axis.
-    Tick Locators are not affected (set automatically)
-
-    Args:
-        fig: pyplot.figure instance
-        ax: pyplot.axis instance (target axis)
-        dates: iterable of datetime.date or datetime.datetime instances
-        fmt: Display format of dates
-        label: x-axis label
-    Returns:
-        None
-
-    """        
-    format_date = lambda index, pos: dates[np.clip(int(index + 0.5), 0, len(dates) - 1)].strftime(fmt)
-    ax.xaxis.set_major_formatter(FuncFormatter(format_date))
-    ax.set_xlabel(label)
-    fig.autofmt_xdate()
-
 def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     ''' Plots the performance of each comp '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
-    
+
     rs = comps[0].returns
     start = rs[rs.diff() != 0].index[1]
-    
-    ind = rs[start:].reset_index().index
-    x = np.arange(min(ind)-1, max(ind)+1)
+
     for comp in comps:
-        ax.plot(x, [1] + comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=LW)
-        
+        ax.plot(rs[start:].index, comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=LW)
+
     # Plot Bank
     rate = 0.03
-    cum_balance = [1] + list(np.cumprod((1+rate)**(1/TRADING_DAYS) * np.ones(len(x)-1)))
-    ax.plot(x, cum_balance, label='Bank (3% p.a.)', alpha=0.9, lw=LW, zorder=-1)
-    
+    cum_balance = list(np.cumprod((1+rate)**(1/TRADING_DAYS) * np.ones(len(rs[start:]))))
+    ax.plot(rs[start:].index, cum_balance, label='Bank (3% p.a.)', alpha=0.9, lw=LW, zorder=-1)
+
     # Aesthetics
-    x = np.arange(-1, len(ind))
-    ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
+    plt.axhline(1, linestyle='--', lw=LW, c='black', alpha=0.5, zorder=-1)
     sns.despine()
     ax.set_title('Strategy Performance', fontsize=LARGE)
-    ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL)
-    equidate_ax(fig, ax, comps[0].returns[start:].index)
+
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b-%y')) 
+
+    # Change the tick interval
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1)) 
+    
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
@@ -261,16 +243,12 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
         ax.plot(held.index, (held.price / held.transaction_price.iloc[0]).to_list(), label=share.code, alpha=0.9, lw=LW)
 
     # Aesthetics
-    plt.axhline(1, xmax=0.865, linestyle='--', lw=LW, c='black', alpha=0.7, zorder=-1)
+    plt.axhline(1, xmax=0.865, linestyle='--', lw=LW, c='black', alpha=0.6, zorder=-1)
     sns.despine()
     ax.set_title('Single Stock Performance', fontsize=LARGE)
-    ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL, loc='right')
-    #equidate_ax(fig, ax, comp.portfolio_value.index[start:])
 
-    import matplotlib.dates as mdates
-    #ax.set_xlim(min(x) - 0.02*len(x), max(x) + 0.15*len(x))
     # Format the date into months & days
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b-%y')) 
 
@@ -288,41 +266,6 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
 
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
-    plt.show()
-    
-def plot_profit(daily, PROFIT):
-    ''' Deprecated '''
-    raise(ImplementationError)
-    
-    fig, ax = plt.subplots(figsize=(20, 10), tight_layout=True)
-
-    ax.plot(np.arange(len(daily)), PROFIT, lw=LW, c='green')
-    ax.axhline(0, linestyle='--', lw=LW, c='black')
-
-    ax.set_title('Profit', fontsize=LARGE)
-    ax.set_xlabel('Date', fontsize=MED)
-    ax.set_ylabel('Profit ($)', fontsize=MED)
-    equidate_ax(fig, ax, daily.index)
-    sns.despine()
-    plt.show()
-    
-def plot_returns(daily, PROFIT):
-    ''' Deprecated '''
-    raise(ImplementationError)
-    
-    fig, ax = plt.subplots(figsize=(20, 10), tight_layout=True)
-
-    profits = np.diff(PROFIT)
-    x = np.arange(len(daily.index)-1)
-    # Positive and Negative
-    ax.bar(x, [max(0, p) for p in profits], width=1, color='green')
-    ax.bar(x, [min(0, p) for p in profits], width=1, color='red')
-
-    sns.despine()
-    ax.set_title('Daily Returns ($)', fontsize=LARGE)
-    ax.set_xlabel('Date', fontsize=MED)
-    ax.set_ylabel('Daily Return ($)', fontsize=MED)
-    equidate_ax(fig, ax, daily.index)
     plt.show()
     
 ################################ Modern Portfolio Theory ################################
