@@ -251,25 +251,41 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
 def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     ''' Plots each individual share's value for each share in composition '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
-    
-    start = comp.portfolio_value.index[0]
-    
+
+    start = comp.portfolio_value.index[-1]
     for share in comp.curr_shares:
-        tmp = share.timeline.reset_index(drop=True)
+        tmp = share.timeline
         held = tmp[tmp.units > 0]
-        x = np.arange(min(held.index)-1, max(held.index)+1)
-        ax.plot(x, [1] + (held.price / held.transaction_price.iloc[0]).to_list(), label=share.code, alpha=0.9, lw=LW)
+        start = min(start, held.index[0])
+
+        ax.plot(held.index, (held.price / held.transaction_price.iloc[0]).to_list(), label=share.code, alpha=0.9, lw=LW)
 
     # Aesthetics
-    x = np.arange(-1, len(comp.portfolio_value))
-    ax.plot(x, np.ones(len(x)), linestyle='--', lw=LW, c='black', alpha=0.7)
+    plt.axhline(1, xmax=0.865, linestyle='--', lw=LW, c='black', alpha=0.7, zorder=-1)
     sns.despine()
     ax.set_title('Single Stock Performance', fontsize=LARGE)
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
-    ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
     plt.legend(frameon=False, fontsize=SMALL, loc='right')
-    equidate_ax(fig, ax, comp.portfolio_value.index)
+    #equidate_ax(fig, ax, comp.portfolio_value.index[start:])
+
+    import matplotlib.dates as mdates
+    #ax.set_xlim(min(x) - 0.02*len(x), max(x) + 0.15*len(x))
+    # Format the date into months & days
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b-%y')) 
+
+    # Change the tick interval
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1)) 
+
+    # Puts x-axis labels on an angle
+    #plt.gca().xaxis.set_tick_params(rotation = 30)  
+
+    # Changes x-axis range
+    held = comp.portfolio_value[comp.portfolio_value.index >= start].index
+    diff = (held[-1] - held[0])
+    ax.set_xbound(held[0] - pd.Timedelta(10*diff/300, 'days'), 
+                  held[-1] + pd.Timedelta(5*diff/30, 'days'))
+
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
