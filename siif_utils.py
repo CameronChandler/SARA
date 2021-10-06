@@ -267,7 +267,7 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
-    
+        
 ################################ Modern Portfolio Theory ################################
     
 def mean_variance_optimisation(returns, b_val=0.1, risk_free=False, interest_rate=0):

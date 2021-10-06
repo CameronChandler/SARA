@@ -2,10 +2,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime as dt
 from matplotlib.ticker import FuncFormatter
+import matplotlib.dates as mdates
 import pandas as pd
 from yahooquery import Ticker
 from tqdm import tqdm
-from siif_utils import send_email, attach_file, attach_image, log, TEST, PROD, SIIF, equidate_ax, TOMORROW
+from siif_utils import send_email, attach_file, attach_image, log, TEST, PROD, SIIF, TOMORROW
 import warnings
 warnings.filterwarnings("ignore")
 from time import sleep
@@ -78,7 +79,8 @@ def plot_shares(daily, filename, save=False, scale=1, show=False):
     ax.set_ylabel('Relative Value')
     ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
     plt.legend(frameon=False, fontsize=SMALL, loc='right')
-    equidate_ax(fig, ax, daily.index)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%m')) 
+    plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1)) 
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     if show:
@@ -158,7 +160,7 @@ for i, row in ANALYSTS.iterrows():
         pct_change = 100 * (daily[code].iloc[-1] / daily[code].iloc[-2] - 1)
         if abs(pct_change) > float(row['sensitivity']):
             daily_changes.append([code, pct_change])
-            
+    
     if not daily_changes:
         continue
         
