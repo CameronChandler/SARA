@@ -6,7 +6,7 @@ import matplotlib.dates as mdates
 import pandas as pd
 from yahooquery import Ticker
 from tqdm import tqdm
-from siif_utils import send_email, attach_file, attach_image, log, TEST, PROD, SIIF, TOMORROW
+from siif_utils import send_email, attach_file, attach_image, log, TEST, PROD, SIIF, TOMORROW, COLORS
 import warnings
 warnings.filterwarnings("ignore")
 from time import sleep
@@ -67,9 +67,9 @@ def plot_shares(daily, filename, save=False, scale=1, show=False):
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
     x = np.arange(len(daily))
-    for code in daily:
+    for code, color in zip(daily, COLORS):
         ls = '--' if code in ['A200', 'NDQ'] else '-'
-        ax.plot(x, daily[code] / daily[code].iloc[0], label=code, alpha=0.9, lw=1.5*LW, linestyle=ls)
+        ax.plot(x, daily[code] / daily[code].iloc[0], label=code, alpha=0.9, lw=1.5*LW, linestyle=ls, c=color)
 
     # Aesthetics
     ax.plot(x, np.ones(len(daily)), linestyle='--', lw=LW, c='black', alpha=0.7)
@@ -140,47 +140,50 @@ def generate_email(gmail_user, to, daily_changes, img_dict, name='Analyst'):
 
     return msg
 
-for i, row in ANALYSTS.iterrows():
-    name, email = row['name'], row['email']
-    if RUNNING_LEVEL == TEST and name != TEST_NAME:
-        continue
+try:
+    for i, row in ANALYSTS.iterrows():
+        name, email = row['name'], row['email']
+        if RUNNING_LEVEL == TEST and name != TEST_NAME:
+            continue
 
-    if row['stocks'] is np.nan:
-        continue
-        
-    stocks = row['stocks'].split()
-    daily = load_data(stocks + ['A200', 'NDQ'])
-    
-    # Ensure that the markets ran today
-    if TODAY != daily.index[-1].date():
-        continue
-    
-    daily_changes = []
-    for code in stocks:
-        pct_change = 100 * (daily[code].iloc[-1] / daily[code].iloc[-2] - 1)
-        if abs(pct_change) > float(row['sensitivity']):
-            daily_changes.append([code, pct_change])
-    
-    if not daily_changes:
-        continue
-        
-    filename = 'daily'
-    plot_shares(daily, filename, save=True)
-    
-    img_dict = []
-    all_files = [(f'./images/{filename}.png', GRAPH_SCALE), (LOGO_PATH, LOGO_SCALE)]
+        if row['stocks'] is np.nan:
+            continue
 
-    for file, scale in all_files:
-        img_dict_single = dict(title=file, path=file, cid=str(uuid.uuid4()), scale=scale)
-        img_dict.append(img_dict_single)
+        stocks = row['stocks'].split()
+        daily = load_data(stocks + ['A200', 'NDQ'])
 
-    try:
-        email_msg = generate_email(gmail_user, email, daily_changes, img_dict=img_dict, name=name)
-        send_email(email_msg, gmail_user, gmail_pwd, email)
-        log('success', name=name, running_level=RUNNING_LEVEL)
-    except:
-        log('failure', name=name, running_level=RUNNING_LEVEL)
-    
-    sleep(5)
-        
-log('end', running_level=RUNNING_LEVEL)
+        # Ensure that the markets ran today
+        if TODAY != daily.index[-1].date():
+            continue
+
+        daily_changes = []
+        for code in stocks:
+            pct_change = 100 * (daily[code].iloc[-1] / daily[code].iloc[-2] - 1)
+            if abs(pct_change) > float(row['sensitivity']):
+                daily_changes.append([code, pct_change])
+
+        if not daily_changes:
+            continue
+
+        filename = 'daily'
+        plot_shares(daily, filename, save=True)
+
+        img_dict = []
+        all_files = [(f'./images/{filename}.png', GRAPH_SCALE), (LOGO_PATH, LOGO_SCALE)]
+
+        for file, scale in all_files:
+            img_dict_single = dict(title=file, path=file, cid=str(uuid.uuid4()), scale=scale)
+            img_dict.append(img_dict_single)
+
+        try:
+            email_msg = generate_email(gmail_user, email, daily_changes, img_dict=img_dict, name=name)
+            send_email(email_msg, gmail_user, gmail_pwd, email)
+            log('success', name=name, running_level=RUNNING_LEVEL)
+        except:
+            log('failure', name=name, running_level=RUNNING_LEVEL)
+
+        sleep(5)
+except Exception as e:
+    log('error', name=e, running_level=RUNNING_LEVEL)
+finally:
+    log('end', running_level=RUNNING_LEVEL)

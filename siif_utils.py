@@ -12,14 +12,16 @@ import csv
 SMALL, MED, LARGE, LW = 18, 24, 30, 3
 plt.rc('axes', titlesize=MED)    # fontsize of the axes title
 plt.rc('axes', labelsize=MED)    # fontsize of the x and y labels
-plt.rc('xtick', labelsize=SMALL)   # fontsize of the tick labels
-plt.rc('ytick', labelsize=SMALL)   # fontsize of the tick labels
+plt.rc('xtick', labelsize=SMALL) # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL) # fontsize of the tick labels
 plt.rc('legend', fontsize=MED)   # legend fontsize
-plt.rc('font', size=LARGE)         # controls default text sizes
+plt.rc('font', size=LARGE)       # controls default text sizes
 
 TRADING_DAYS = 252
 INITIAL_CASH = 20_000
 TOMORROW = dt.datetime.today().date() + dt.timedelta(days=1)
+COLORS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', '#ffe119', '#46f0f0', '#008080', 
+          '#9a6324', '#808000', '#000075', '#aaffc3', '#000000', '#808080']
 
 TEST, PROD = 0, 1
 SIIF = 1
@@ -235,12 +237,13 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
 
     start = comp.portfolio_value.index[-1]
-    for share in comp.curr_shares:
+    for share, color in zip(comp.curr_shares, COLORS):
         tmp = share.timeline
         held = tmp[tmp.units > 0]
         start = min(start, held.index[0])
 
-        ax.plot(held.index, (held.price / held.transaction_price.iloc[0]).to_list(), label=share.code, alpha=0.9, lw=LW)
+        ax.plot(held.index, (held.price / held.transaction_price.iloc[0]).to_list(), 
+                label=share.code, alpha=0.9, lw=LW, c=color)
 
     # Aesthetics
     plt.axhline(1, xmax=0.865, linestyle='--', lw=LW, c='black', alpha=0.6, zorder=-1)
@@ -355,6 +358,8 @@ def log(typ, running_level, name='', verbose=True, freq='WEEKLY'):
         msg = f'Email to {name.rjust(10)} failed at ' + str(dt.datetime.now()) + '\n'
     elif typ == 'end':
         msg = '==== Completed emailing at ' + str(dt.datetime.now()) + ' ====\n\n'
+    elif typ == 'error':
+        msg = 'Error: ' + repr(name) + ' ' + str(dt.datetime.now()) + '\n'
     
     # Where to log
     if running_level == PROD:
