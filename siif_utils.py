@@ -46,7 +46,8 @@ class Dividend(CashFlow):
         super().__init__(row)
     
 class Share:
-    ''' Holds the meta data of one share in a composition '''
+    ''' Holds the meta data of one share in a composition 
+    timeline: dataframe of share information'''
     
     def __init__(self, row, dates):
         self.code = row['code']
@@ -55,7 +56,7 @@ class Share:
         # Merge in price data
         price = Ticker(f'{self.code}.AX').history(start=self.timeline.index[0], end=TOMORROW).reset_index()[['date', 'close']]
         price.columns = ['date', 'price']
-        self.timeline = pd.merge(self.timeline, price, on='date', how='left').set_index('date')
+        self.timeline = pd.merge(self.timeline, price, on='date', how='left').set_index('date').ffill(inplace=True)
         
     def add_info(self, row):
         date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
