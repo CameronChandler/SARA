@@ -227,7 +227,7 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b-%y')) 
 
     # Change the tick interval
-    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1)) 
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=len(comp.returns.index) // 150)) 
     
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
@@ -257,7 +257,7 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b-%y')) 
 
     # Change the tick interval
-    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=1)) 
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator(interval=len(comp.returns.index) // 150)) 
 
     # Puts x-axis labels on an angle
     #plt.gca().xaxis.set_tick_params(rotation = 30)  
