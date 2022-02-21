@@ -66,7 +66,7 @@ def plot_shares(daily, filename, save=False, scale=1, show=False):
     ''' Plots each individual share's value for each share in composition '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
     
-    x = np.arange(len(daily))
+    x = daily.index
     for code, color in zip(daily, COLORS):
         ls = '--' if code in ['A200', 'NDQ'] else '-'
         ax.plot(x, daily[code] / daily[code].iloc[0], label=code, alpha=0.9, lw=1.5*LW, linestyle=ls, c=color)
@@ -77,8 +77,8 @@ def plot_shares(daily, filename, save=False, scale=1, show=False):
     ax.set_title('Weekly Single Stock Performance', fontsize=LARGE)
     ax.set_xlabel('Date')
     ax.set_ylabel('Relative Value')
-    ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
-    plt.legend(frameon=False, fontsize=SMALL, loc='right')
+    #ax.set_xlim(min(x) - 0.03*len(x), max(x) + 0.15*len(x))
+    ax.legend(frameon=False, fontsize=SMALL, loc='upper left')
     plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%m')) 
     plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=1)) 
     if save:
