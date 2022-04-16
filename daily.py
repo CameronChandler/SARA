@@ -87,7 +87,7 @@ def plot_shares(daily, filename, save=False, scale=1, show=False):
         plt.show()
     
 ######################################## STEP 3. SEND EMAILS ########################################
-import cgi
+import html
 import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -120,12 +120,12 @@ def generate_email(gmail_user, to, daily_changes, img_dict, name='Analyst'):
     
     
     msg_html += '<div dir="ltr">''<img src="cid:{cid}" alt="{alt}" width="{w}" height="{h}"><br></div>'.format(
-                alt=cgi.escape('image not found', quote=True), w=GRAPH_SCALE[0], h=GRAPH_SCALE[1], **img_dict[0])
+                alt=html.escape('image not found', quote=True), w=GRAPH_SCALE[0], h=GRAPH_SCALE[1], **img_dict[0])
     
     # Add sign-off and logo
     msg_html += '<p>Have a great day!</p><p>From Sara (SIIF Automated Reporting Assistant)</p>'
     msg_html += '<div dir="ltr">''<img src="cid:{cid}" alt="{alt}" width="{w}" height="{h}"><br></div>'.format(
-                alt=cgi.escape('image not found', quote=True), w=LOGO_SCALE[0], h=LOGO_SCALE[1], **img_dict[-1])
+                alt=html.escape('image not found', quote=True), w=LOGO_SCALE[0], h=LOGO_SCALE[1], **img_dict[-1])
     
     msg_html += u"<p>---------------------------------</p>"
     msg_html += u"<p><small>Do not reply to this email</small></p>"

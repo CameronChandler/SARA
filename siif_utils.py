@@ -27,11 +27,11 @@ TEST, PROD = 0, 1
 SIIF = 1
 
 class CashFlow:
-    ''' Holds the meta data of one share in a composition '''
+    ''' Holds the meta data of one cash_flow '''
     
     def __init__(self, row):
-        self.cash = float(row['price'])
-        self.date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
+        self.cash = row.price
+        self.date = row.date
         
     def __str__(self):
         return self.__repr__()
@@ -49,21 +49,70 @@ class Share:
     ''' Holds the meta data of one share in a composition 
     timeline: dataframe of share information'''
     
-    def __init__(self, row, dates):
-        self.code = row['code']
-        self.timeline = pd.DataFrame({'units': 0, 'transaction_price': 0, 'fees': 0}, index=dates)
+    def __init__(self, transactions, dates):
+        self.code = transactions.iloc[0].code
+        self.transactions = transactions.sort_values('date')
+        self.dates = dates
+        self.timeline = self._gen_timeline()
+            
+    def _gen_timeline(self):
+        # Initialise empty timeline
+        timeline = pd.DataFrame({'units': 0, 'transaction_price': 0, 'fees': 0}, index=self.dates)
         
-        # Merge in price data
-        price = Ticker(f'{self.code}.AX').history(start=self.timeline.index[0], end=TOMORROW).reset_index()[['date', 'close']]
-        price.columns = ['date', 'price']
-        self.timeline = pd.merge(self.timeline, price, on='date', how='left').set_index('date').ffill()
+        timeline = self._add_transactions_to_timeline(timeline)
         
-    def add_info(self, row):
-        date = pd.to_datetime(row['date'], format='%d/%m/%Y').date()
-        self.timeline.loc[date:, 'units'] += int(row['units'])
-        self.timeline.loc[date, 'fees'] = float(row['fee'])
-        self.timeline.loc[date, 'transaction_price'] = float(row['price'])
+        timeline = self._add_prices_to_timeline(timeline)
         
+        return timeline
+            
+    def _add_transactions_to_timeline(self, timeline):
+        for _, row in self.transactions.iterrows():
+            timeline.loc[row.date:, 'units'] += row.units
+            timeline.loc[row.date, 'fees'] = row.fee
+            timeline.loc[row.date, 'transaction_price'] = row.price
+            
+        return timeline
+    
+    def _add_prices_to_timeline(self, timeline, test=False):
+        
+        prices = self._gen_real_prices()
+        
+        if prices is None:
+            prices = self._gen_fake_prices()
+        
+        if test:
+            return(timeline, prices)
+        timeline = pd.merge(timeline, prices, on='date', how='left').ffill()
+            
+        return timeline
+            
+    def _gen_real_prices(self):
+        ''' Attempt to generate real prices. Returns None if prices cannot be found '''
+        prices = Ticker(f'{self.code}.AX').history(start=self.dates[0], end=TOMORROW)
+        if isinstance(prices, dict):
+            return None
+        
+        prices = prices.reset_index()[['date', 'close']].set_index('date')
+        prices.columns = ['price']
+        return prices
+    
+    def _gen_fake_prices(self):
+        ''' Use linear interpolation to estimate prices '''
+        # Initialise prices df
+        prices = pd.DataFrame({'price': 0}, index=self.dates)
+
+        # Between each pair of transactions, calculate the slope to perform linear interpolation
+        prev = self.transactions.iloc[0]
+        for _, curr in self.transactions.iloc[1:].iterrows():
+            prices.loc[curr.date] = curr.price
+            slope = (curr.price - prev.price) / (len(prices.loc[prev.date: curr.date]) - 1)
+            prices.loc[prev.date: curr.date] = slope
+            prices.loc[prev.date] = prev.price
+
+            prices.loc[prev.date: curr.date] = prices.loc[prev.date: curr.date].cumsum()
+            
+        return prices
+
     def __str__(self):
         return self.__repr__()
         
@@ -84,9 +133,7 @@ class Comp:
     def __init__(self, name, filename):
         self.name = name
         self.filename = filename
-        self.cash_flows = []
-        self.dividends  = []
-        self.shares = self.load_comp()
+        self.shares, self.cash_flows, self.dividends = self.load_comp()
         self.curr_shares = [share for share in self.shares if share.timeline.iloc[-1]['units'] != 0]
         self.portfolio_value = self.get_portfolio_value()
         self.returns = self.get_returns()
@@ -94,34 +141,34 @@ class Comp:
     def load_comp(self):
         ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
         # First, work out when the portfolio starts
-        min_date = TOMORROW
-        with open('./comps/'+self.filename+'.csv', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if not row['code']:
-                    break
-                min_date = min(min_date, pd.to_datetime(row['date'], format='%d/%m/%Y').date())
+        data = pd.read_csv('./comps/'+self.filename+'.csv')
+        data['date'] = pd.to_datetime(data.date, dayfirst=True).dt.date
+        data['price'] = data.price.astype(float)
+        min_date = data.date.min()
                 
-        dates = Ticker('NDQ.AX').history(start=min_date, end=TOMORROW).reset_index()['date']
+        self.dates = Ticker('NDQ.AX').history(start=min_date, end=TOMORROW).reset_index()['date']
+
+        # Calculate the net units owned of each share, and split data into past and current shares
+        share_data = data[~data.code.isin(['CASH_FLOW', 'DIVIDEND'])]
+        share_data['units'] = share_data.units.astype(int)
+        share_data['fee']   = share_data.fee.astype(float)
         
-        # Then parse the data
-        shares = {}
-        with open('./comps/'+self.filename+'.csv', newline='') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                code = row['code']
-                if not code:
-                    break
-                elif code == 'CASH_FLOW':
-                    self.cash_flows.append(CashFlow(row))
-                elif code == 'DIVIDEND':
-                    self.dividends.append(Dividend(row))
-                else:
-                    if code not in shares:
-                        shares[code] = Share(row, dates)
-                    shares[code].add_info(row)
+        shares = []
+        cash_flows = []
+        dividends = []
+        for code in share_data.code.unique():
+            shares.append(Share(share_data[share_data.code == code], self.dates))
+            
+        cash_flow_data = data[data.code == 'CASH_FLOW']
+        dividends_data = data[data.code == 'DIVIDEND']
+        
+        for _, row in cash_flow_data.iterrows():
+            cash_flows.append(CashFlow(row))
+        
+        for _, row in dividends_data.iterrows():
+            dividends.append(Dividend(row))
                 
-        return list(shares.values())
+        return shares, cash_flows, dividends
     
     def get_portfolio_value(self, end_of_day=False):
         ''' Calculate the portfolio value for each day '''
@@ -129,20 +176,20 @@ class Comp:
         for share in self.shares:
             total_share_value += share.timeline['price'] * share.timeline['units']
             
-        return total_share_value + self.get_cash(end_of_day, total_share_value.index)
+        return total_share_value + self.get_cash(end_of_day)
     
-    def get_cash(self, end_of_day, dates):        
+    def get_cash(self, end_of_day):        
         ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
         # Initialise starting balance
         # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
-        cash = pd.Series(self.cash_flows[0].cash, index=dates)
+        cash = pd.Series(self.cash_flows[0].cash, index=self.dates)
 
         for cash_event in self.cash_flows[1:] + self.dividends:
             # When should cash_flow count
             if end_of_day:
-                effective_period = np.where(dates >  cash_event.date , 1, 0)
+                effective_period = np.where(self.dates >  cash_event.date , 1, 0)
             else:
-                effective_period = np.where(dates >= cash_event.date , 1, 0)
+                effective_period = np.where(self.dates >= cash_event.date , 1, 0)
 
             cash += cash_event.cash * effective_period
 
@@ -210,7 +257,9 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     start = rs[rs.diff() != 0].index[1]
 
     for comp in comps:
-        ax.plot(rs[start:].index, comp.returns[start:].to_list(), label=comp.name, alpha=0.9, lw=LW)
+        x = rs[start:]
+        y = comp.returns[start:]
+        ax.plot(x[~x.index.duplicated(keep='first')].index, y[~y.index.duplicated(keep='first')], label=comp.name, alpha=0.9, lw=LW)
 
     # Plot Bank
     rate = 0.03
@@ -220,7 +269,7 @@ def plot_comps(comps, filename='strategy_comparison', save=False, scale=1):
     # Aesthetics
     plt.axhline(1, linestyle='--', lw=LW, c='black', alpha=0.5, zorder=-1)
     sns.despine()
-    ax.set_title('Strategy Performance', fontsize=LARGE)
+    ax.set_title('Portfolio Performance', fontsize=LARGE)
     ax.set_ylabel('Relative Value')
     plt.legend(frameon=False, fontsize=SMALL)
 
