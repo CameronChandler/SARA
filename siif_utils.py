@@ -141,7 +141,7 @@ class Comp:
     def load_comp(self):
         ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
         # First, work out when the portfolio starts
-        data = pd.read_csv('./comps/'+self.filename+'.csv')
+        data = pd.read_csv('./comps/'+self.filename+'.csv').dropna(how='all')
         data['date'] = pd.to_datetime(data.date, dayfirst=True).dt.date
         data['price'] = data.price.astype(float)
         min_date = data.date.min()
