@@ -63,7 +63,7 @@ class Share:
         
         timeline = self._add_prices_to_timeline(timeline)
         
-        return timeline
+        return timeline.fillna(0)
             
     def _add_transactions_to_timeline(self, timeline):
         for _, row in self.transactions.iterrows():
