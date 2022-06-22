@@ -3,11 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime as dt
-from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 from yahooquery import Ticker
-from tqdm import tqdm
-import csv
+
 
 SMALL, MED, LARGE, LW = 18, 24, 30, 3
 plt.rc('axes', titlesize=MED)    # fontsize of the axes title
@@ -320,81 +318,6 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
-        
-################################ Modern Portfolio Theory ################################
-    
-def mean_variance_optimisation(returns, b_val=0.1, risk_free=False, interest_rate=0):
-    ''' 
-    Completes Mean Variance Optimisation
-    
-    INPUT:
-        returns       - Dataframe where each column is an asset and each row is a date
-        b_val         - Scalar, minimum expected rate of return
-        risk_free     - Boolean, whether or not a risk free asset should be considered
-        interest_rate - Float, annual rate of return of risk free asset
-    OUTPUT:
-        problem.value - Scalar, representing variance (i.e. squared volatility) of optimal asset allocation
-        w.value       - Vector, representing optimal asset allocation 
-    '''
-    import cvxpy as cp
-
-    μ = returns.mean().to_numpy() * TRADING_DAYS
-    Σ = returns.cov().to_numpy() * TRADING_DAYS
-    if risk_free:
-        μ = np.append(μ, interest_rate)
-        # Risk free assets have 0 variance, and 0 correlation with other instruments
-        Σ = np.r_[Σ, [np.zeros(len(Σ))]] 
-        Σ = np.c_[Σ, np.zeros(len(Σ))]  
-    
-    J = np.ones(len(μ))
-    w = cp.Variable(len(μ))
-    b = cp.Parameter(nonneg=True)
-    # Minimum expected return
-    b.value = b_val
-    constraints = [μ.T @ w >= b,
-                   J.T @ w == 1,
-                   w >= 0]
-    objective = cp.Minimize(cp.quad_form(w, Σ))
-    problem = cp.Problem(objective, constraints)
-    problem.solve()
-    
-    return problem.value, w.value.round(10)
-
-################################ Sending Emails ################################
-from email.mime.image import MIMEImage
-from email.header import Header
-import os
-import smtplib
-from email.mime.base import MIMEBase
-from email import encoders
-import cgi
-import uuid
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.header import Header
-
-def attach_image(img_dict):
-    with open(img_dict['path'], 'rb') as file:
-        msg_image = MIMEImage(file.read(), name=os.path.basename(img_dict['path']))
-    msg_image.add_header('Content-ID', '<{}>'.format(img_dict['cid']))
-    return msg_image
-
-def attach_file(filename):
-    part = MIMEBase('application', 'octect-stream')
-    part.set_payload(open(filename, 'rb').read())
-    encoders.encode_base64(part)
-    part.add_header('Content-Disposition', 'attachment; filename=%s' % os.path.basename(filename))
-    return part
-
-def send_email(msg, gmail_user, gmail_pwd, to):
-    ''' Establishes connection and sends email `msg` '''
-    mailServer = smtplib.SMTP('smtp.gmail.com', 587)
-    mailServer.ehlo()
-    mailServer.starttls()
-    mailServer.ehlo()
-    mailServer.login(gmail_user, gmail_pwd)
-    mailServer.sendmail(gmail_user, to, msg.as_string())
-    mailServer.quit()
     
 ################################ Logging ################################  
 def log(typ, running_level, name='', verbose=True, freq='WEEKLY'):
