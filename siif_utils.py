@@ -318,25 +318,3 @@ def plot_shares(comp, filename='single_stocks', save=False, scale=1):
     if save:
         plt.savefig('./images/'+filename+'.png', dpi=scale*2*fig.dpi)
     plt.show()
-    
-################################ Logging ################################  
-def log(typ, running_level, name='', verbose=True, freq='WEEKLY'):
-    ''' Log the emailing process. Log to log.txt if running_level is PROD, print if verbose is True '''
-    # What is the message
-    if typ == 'begin':
-        msg = freq + '\n=== Begin running at ' + str(dt.datetime.now()) + ' ====\n'
-    elif typ == 'success':
-        msg = f'Email to {name.rjust(10)} succeeded at ' + str(dt.datetime.now()) + '\n'
-    elif typ == 'failure':
-        msg = f'Email to {name.rjust(10)} failed at ' + str(dt.datetime.now()) + '\n'
-    elif typ == 'end':
-        msg = '==== Completed emailing at ' + str(dt.datetime.now()) + ' ====\n\n'
-    elif typ == 'error':
-        msg = 'Error: ' + repr(name) + ' ' + str(dt.datetime.now()) + '\n'
-    
-    # Where to log
-    if running_level == PROD:
-        with open('log.txt', 'a') as f:
-            f.write(msg)
-    if verbose:
-        print(msg)
