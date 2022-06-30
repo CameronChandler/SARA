@@ -1,9 +1,8 @@
-############################################### TODO ################################################
-# - Add to README
-
 import pandas as pd
 from emails import WeeklyEmail, Recipient, Image, send_email
-from siif_utils import Comp, plot_shares, plot_comps, log, TEST, SIIF, PROD
+from portfolio import Portfolio, PortfolioChoice
+from logger import Logger, RunningLevel
+from plotting import plot_portfolio, plot_portfolios
 import warnings
 warnings.filterwarnings("ignore")
 from time import sleep
@@ -13,33 +12,33 @@ import sys
 args = sys.argv[1:]
 
 if args and args[0] == 'prod':
-    RUNNING_LEVEL = PROD
-    PORTFOLIO = SIIF
+    running_level = RunningLevel.PROD
+    portfolio_choice = PortfolioChoice.SIIF
 else:
-    RUNNING_LEVEL = TEST
+    running_level = RunningLevel.TEST
     
     if args and args[1] == 'siif':
-        PORTFOLIO = SIIF
+        portfolio_choice = PortfolioChoice.SIIF
     else:
-        PORTFOLIO = TEST
+        portfolio_choice = PortfolioChoice.TEST
 
-#RUNNING_LEVEL = TEST
-#PORTFOLIO = SIIF     
-##############################################
+running_level = RunningLevel.TEST
+portfolio_choice = PortfolioChoice.SIIF     
 
-log('begin', running_level=RUNNING_LEVEL)
+log = Logger('WEEKLY', running_level)
+log.begin()
 ####################################### STEP 1. PREPARE DATA ########################################
 
-# Composition Name: Composition CSV file
-test_comps = {'SIIF': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
-siif_comps = {'SIIF': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
-names = test_comps if PORTFOLIO == TEST else siif_comps
-# ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `comps` FIRST
-comps = [Comp(name, names[name]) for name in names]
+# Portfolio Name: Portfolio CSV file
+test_portfolios = {'SIIF': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
+siif_portfolios = {'SIIF': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
+names = test_portfolios if portfolio_choice == PortfolioChoice.TEST else siif_portfolios
+# ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `portfolios` FIRST
+portfolios = [Portfolio(name, names[name]) for name in names]
 
 ######################################### STEP 2. PLOT DATA #########################################
-plot_shares(comps[0], save=True)
-plot_comps(comps, save=True)
+plot_portfolio(portfolios[0])
+plot_portfolios(portfolios)
 
 ######################################## STEP 3. SEND EMAILS ########################################
 # Stock Alert Report Automaton
@@ -52,7 +51,7 @@ TEST_NAME = 'Cameron'
 emails = pd.read_csv('./data/emails.csv')
 recipients_test = emails[emails['name'] == TEST_NAME]
 recipients_prod = emails
-recipients = recipients_prod if RUNNING_LEVEL == PROD else recipients_test
+recipients = recipients_prod if running_level == RunningLevel.PROD else recipients_test
 recipients = [Recipient(row['email'], row['name']) for _, row in recipients.iterrows()]
 
 email_address = "sarasiifbot@gmail.com"
@@ -71,11 +70,11 @@ images: list[Image] = [Image(path, width, height) for path, (width, height) in a
 
 for recipient in recipients:
     try:
-        email = WeeklyEmail(email_address, recipient, images, comps[0].portfolio_value)
+        email = WeeklyEmail(email_address, recipient, images, portfolios[0].portfolio_value)
         send_email(email, email_address, email_password)
-        log('success', name=recipient.name, running_level=RUNNING_LEVEL)
+        log.success(recipient.name)
     except:
-        log('failure', name=recipient.name, running_level=RUNNING_LEVEL)
+        log.failure(recipient.name)
     sleep(5)
         
-log('end', running_level=RUNNING_LEVEL)
+log.end()

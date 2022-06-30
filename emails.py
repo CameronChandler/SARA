@@ -129,7 +129,7 @@ class DailyEmail(Email):
     ''' Create and send daily emails '''
     header = 'SIIF - Large Stock Movement Alert'
 
-    def __init__(self, email_address: str, recipient: Recipient, images: list[Image], daily_changes: pd.DataFrame) -> None:
+    def __init__(self, email_address: str, recipient: Recipient, images: list[Image], daily_changes: list[tuple[str, float]]) -> None:
         self.daily_changes = daily_changes
         super().__init__(email_address, recipient, images)
 

@@ -1,31 +1,50 @@
-import datetime as dt
-from siif_utils import PROD, TEST
+import logging
 from enum import Enum, auto
+import datetime as dt
+
+class Date:
+    @staticmethod
+    def today() -> dt.date:
+        return dt.date.today()
+
+    @classmethod
+    def tomorrow(cls) -> dt.date:
+        return cls.today() + dt.timedelta(days=1)
+
+    @classmethod
+    def last_week(cls) -> dt.date:
+        return cls.today() - dt.timedelta(days=7)
+
+class RunningLevel(Enum):
+    PROD = auto()
+    TEST = auto()
 
 class Logger:
+    log_filename = {RunningLevel.PROD: 'log.txt', RunningLevel.TEST: 'test_log.txt'}
 
-    def __init__(self, frequency: str, log_filename: str='log.txt', running_level: int=TEST) -> None:
-        self.filename = log_filename
+    def __init__(self, frequency: str, running_level: RunningLevel=RunningLevel.TEST) -> None:
         self.frequency = frequency
+        self.running_level = running_level
+        logging.basicConfig(
+            format='%(asctime)s %(levelname)s: %(message)s',
+            handlers=[
+                logging.FileHandler(self.log_filename[self.running_level]),
+                logging.StreamHandler()
+            ],
+            level=logging.INFO
+        )
 
     def begin(self) -> None:
-        self._log(f'{self.frequency}\n=== Begin running at {str(dt.datetime.now())} ====\n')
+        logging.info(f'==== Begin running {self.frequency} ====')
 
     def success(self, name: str) -> None:
-        self._log(f'Email to {name : >10} succeeded at {str(dt.datetime.now())}\n')
+        logging.info(f'Email to {name : >10} succeeded')
 
     def failure(self, name: str) -> None:
-        self._log(f'Email to {name : >10} failed at {str(dt.datetime.now())}\n')
+        logging.error(f'Email to {name : >10} failed')
 
     def end(self) -> None:
-        self._log(f'==== Completed emailing at {str(dt.datetime.now())} ====\n\n')
+        logging.info(f'==== Completed emailing ====\n')
 
     def error(self, name: str) -> None:
-        self._log(f'Error: {name : >10} {str(dt.datetime.now())}\n')
-
-    def _log(self, message: str) -> None:
-        # Print message so that user can see it
-        print(message)
-
-        with open(self.filename, 'a') as fp:
-            fp.write(message)
+        logging.error(f'Error: {name : >10}')

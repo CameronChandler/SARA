@@ -1,6 +1,6 @@
 log.txt
 data/
-comps/TEST.csv
+portfolios/TEST.csv
 .ipynb_checkpoints/
 main/
 __pycache__/
@@ -8,3 +8,7 @@ Modern Portfolio Theory.ipynb
 Daily Movements.ipynb
 Portfolio Performance.ipynb
 user guide.txt
+.vscode/
+images/
+522 SARA workspace.code-workspace
+test_log.txt

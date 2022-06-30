@@ -1,0 +1,8 @@
+# minute hour day_of_month month day_of_week command
+1 18 * * 1 bash /home/cjchandler/Documents/SARA/daily.sh
+1 18 * * 2 bash /home/cjchandler/Documents/SARA/daily.sh
+1 18 * * 3 bash /home/cjchandler/Documents/SARA/daily.sh
+1 18 * * 4 bash /home/cjchandler/Documents/SARA/daily.sh
+1 18 * * 5 bash /home/cjchandler/Documents/SARA/daily.sh
+31 18 * * 5 bash /home/cjchandler/Documents/SARA/weekly.sh
+31 17 * * 5 bash /home/cjchandler/Documents/SARA/test.sh
