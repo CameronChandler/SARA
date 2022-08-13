@@ -1,7 +1,7 @@
 import datetime as dt
 import pandas as pd
 from yahooquery import Ticker
-from emails import DailyEmail, Recipient, Image, send_email
+from emails import DailyEmail, Recipient, Image, send_email, LOGO_SCALE, GRAPH_SCALE
 from logger import Logger, RunningLevel, Date
 from plotting import plot_shares
 import warnings
@@ -18,22 +18,19 @@ if args and args[0] == 'prod':
 else:
     running_level = RunningLevel.TEST
 
-running_level = RunningLevel.TEST
+#running_level = RunningLevel.TEST
 
 log = Logger('DAILY', running_level)
 log.begin()
 ####################################### STEP 1. PREPARE DATA ########################################
 
-TODAY = dt.date.today()
-LAST_WEEK = TODAY - pd.Timedelta(days=7)
-
-def load_data(codes: list[str], start: dt.date=Date.last_week(), end: dt.date=Date.tomorrow()) -> pd.DataFrame:
+def load_data(codes: list[str], start: dt.date=Date.last_week()) -> pd.DataFrame:
     ''' Takes list of shares and returns data from the start date '''
     daily = pd.DataFrame({'date': []})
 
     # Load data
     for code in codes:
-        df = Ticker(f'{code}.AX').history(start=start, end=end).reset_index()[['date', 'close']]
+        df = Ticker(f'{code}.AX').history(start=start).reset_index()[['date', 'close']]
         df.columns = ['date', code]
         daily = pd.merge(daily, df, on='date', how='outer')
 
@@ -58,9 +55,6 @@ email_address = "sarasiifbot@gmail.com"
 with open('./data/password.txt') as fp:
     email_password = fp.read()
 
-LOGO_SCALE = (258, 155)
-GRAPH_SCALE = (691, 389)
-
 try:
     for recipient in recipients:
 
@@ -70,13 +64,13 @@ try:
         daily = load_data(recipient.codes + ['A200', 'NDQ'])
 
         # Ensure that the markets ran today
-        if TODAY != daily.index[-1].date():
+        if Date.today() != daily.index[-1].date():
             break
 
         daily_changes = []
         for code in recipient.codes:
             pct_change = 100 * (daily[code].iloc[-1] / daily[code].iloc[-2] - 1)
-            if abs(pct_change) > float(row['sensitivity']):
+            if abs(pct_change) >= float(row['sensitivity']):
                 daily_changes.append((code, pct_change))
 
         if not daily_changes:

@@ -21,6 +21,9 @@ class Recipient:
     codes: list[str] = field(default_factory=list)
     sensitivity: float = float('inf')
 
+LOGO_SCALE = (258, 155)
+GRAPH_SCALE = (691, 389)
+
 @dataclass
 class Image:
     ''' Class representing an image to be included in an email '''
@@ -29,7 +32,7 @@ class Image:
     height: int
     cid: str = field(init=False)
     graphic: MIMEImage = field(init=False)
-
+    
     def __post_init__(self) -> None:
         self.cid = str(uuid.uuid4())
 

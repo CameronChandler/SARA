@@ -3,7 +3,6 @@ import pandas as pd
 import datetime as dt
 from yahooquery import Ticker
 from enum import Enum, auto
-from logger import Date
 
 class PortfolioChoice(Enum):
     SIIF = auto()
@@ -33,10 +32,11 @@ class Dividend(CashFlow):
     
 class Share:
     ''' Holds the meta data of one share in a portfolio 
-    timeline: dataframe of share information'''
+        timeline: dataframe of share information
+    '''
     
-    def __init__(self, transactions: pd.DataFrame, dates: pd.Series) -> None:
-        self.code = transactions.iloc[0].code
+    def __init__(self, transactions: pd.DataFrame, dates: pd.Series[dt.date]) -> None:
+        self.code: str = transactions.iloc[0].code
         self.transactions = transactions.sort_values('date')
         self.dates = dates
         self.timeline = self._gen_timeline()
@@ -74,7 +74,7 @@ class Share:
             
     def _gen_real_prices(self) -> pd.DataFrame:
         ''' Attempt to generate real prices. Returns None if prices cannot be found '''
-        prices = Ticker(f'{self.code}.AX').history(start=self.dates[0], end=Date.tomorrow())
+        prices = Ticker(f'{self.code}.AX').history(start=self.dates[0])
         if isinstance(prices, dict):
             return None
         
@@ -107,14 +107,15 @@ class Share:
 
 class Portfolio:
     ''' Represents a portfolio composition 
-    name:            name of portfolio (shows up on graphs)
-    filename:        filename for CSV file containing portfolio meta data
-    shares:          list of Share objects
-    curr_shares:     list of Share objects that are currently owned
-    cash_flows:      list of CashFlow objects
-    dividends:       list of Dividend objects
-    portfolio_value: numpy array of net portfolio value over time
-    returns:         portfolio performance'''
+        name:            name of portfolio (shows up on graphs)
+        filename:        filename for CSV file containing portfolio meta data
+        shares:          list of Share objects
+        curr_shares:     list of Share objects that are currently owned
+        cash_flows:      list of CashFlow objects
+        dividends:       list of Dividend objects
+        portfolio_value: numpy array of net portfolio value over time
+        returns:         portfolio performance
+    '''
     
     def __init__(self, name: str, filename: str) -> None:
         self.name = name
@@ -132,7 +133,7 @@ class Portfolio:
         data['price'] = data.price.astype(float)
         min_date = data.date.min()
                 
-        self.dates = Ticker('NDQ.AX').history(start=min_date, end=Date.tomorrow()).reset_index()['date']
+        self.dates = Ticker('NDQ.AX').history(start=min_date).reset_index()['date']
 
         # Calculate the net units owned of each share, and split data into past and current shares
         share_data = data[~data.code.isin(['CASH_FLOW', 'DIVIDEND'])]
@@ -156,7 +157,7 @@ class Portfolio:
                 
         return shares, cash_flows, dividends
     
-    def get_portfolio_value(self, end_of_day: bool=False) -> pd.Series:
+    def get_portfolio_value(self, end_of_day: bool=False) -> "pd.Series[float]":
         ''' Calculate the portfolio value for each day '''
         total_share_value = pd.Series(0, index=self.shares[0].timeline.index)
         for share in self.shares:
@@ -164,7 +165,7 @@ class Portfolio:
             
         return total_share_value + self.get_cash(end_of_day)
     
-    def get_cash(self, end_of_day: bool) -> pd.Series:        
+    def get_cash(self, end_of_day: bool) -> "pd.Series[float]":        
         ''' Return a numpy array representing the amount of cash in the portfolio at each day '''
         # Initialise starting balance
         # cash = [20_000, 20_000, 20_000, 20_000] 1xD 
@@ -189,7 +190,7 @@ class Portfolio:
 
         return cash
     
-    def get_returns(self) -> pd.Series:
+    def get_returns(self) -> "pd.Series[float]":
         ''' Calculate portfolio returns at each day. Accounts for cash injection/withdrawal
         Method from https://www.fool.com/about/how-to-calculate-investment-returns/
         

@@ -8,10 +8,6 @@ class Date:
         return dt.date.today()
 
     @classmethod
-    def tomorrow(cls) -> dt.date:
-        return cls.today() + dt.timedelta(days=1)
-
-    @classmethod
     def last_week(cls) -> dt.date:
         return cls.today() - dt.timedelta(days=7)
 

@@ -1,5 +1,5 @@
 import pandas as pd
-from emails import WeeklyEmail, Recipient, Image, send_email
+from emails import WeeklyEmail, Recipient, Image, send_email, LOGO_SCALE, GRAPH_SCALE
 from portfolio import Portfolio, PortfolioChoice
 from logger import Logger, RunningLevel
 from plotting import plot_portfolio, plot_portfolios
@@ -22,8 +22,8 @@ else:
     else:
         portfolio_choice = PortfolioChoice.TEST
 
-running_level = RunningLevel.TEST
-portfolio_choice = PortfolioChoice.SIIF     
+#running_level = RunningLevel.TEST
+#portfolio_choice = PortfolioChoice.SIIF     
 
 log = Logger('WEEKLY', running_level)
 log.begin()
@@ -57,9 +57,6 @@ recipients = [Recipient(row['email'], row['name']) for _, row in recipients.iter
 email_address = "sarasiifbot@gmail.com"
 with open('./data/password.txt') as fp:
     email_password = fp.read()
-
-LOGO_SCALE = (258, 155)
-GRAPH_SCALE = (691, 389)
 
 # Make sure the logo is last in the list
 all_files = [('./images/strategy_comparison.png', GRAPH_SCALE), 
