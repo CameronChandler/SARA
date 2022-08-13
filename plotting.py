@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.dates as mdates
 from portfolio import Portfolio
+from typing import List
 
 SMALL, MED, LARGE, LW = 18, 24, 30, 3
 plt.rc('axes', titlesize=MED)    # fontsize of the axes title
@@ -18,7 +19,7 @@ TRADING_DAYS = 252
 COLORS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', '#ffe119', '#46f0f0', '#008080', 
           '#9a6324', '#808000', '#000075', '#aaffc3', '#000000', '#808080']
 
-def plot_portfolios(portfolios: list[Portfolio], filename: str='strategy_comparison') -> None:
+def plot_portfolios(portfolios: List[Portfolio], filename: str='strategy_comparison') -> None:
     ''' Plots the performance of each portfolio '''
     fig, ax = plt.subplots(figsize=(16, 9), tight_layout=True)
 

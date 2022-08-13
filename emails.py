@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import pandas as pd
 import numpy as np
 import datetime
+from typing import List, Tuple
 
 from email.header import Header
 from email.mime.text import MIMEText
@@ -18,7 +19,7 @@ class Recipient:
     ''' Class representing a SIIF recipient of SARA emails '''
     email_address: str
     name: str = 'SIIF Member'
-    codes: list[str] = field(default_factory=list)
+    codes: List[str] = field(default_factory=list)
     sensitivity: float = float('inf')
 
 LOGO_SCALE = (258, 155)
@@ -46,7 +47,7 @@ class Email(ABC):
     ''' Abstract class for email. Responsible for creating an email '''
     header: str
 
-    def __init__(self, email_address: str, recipient: Recipient, images: list[Image]) -> None:
+    def __init__(self, email_address: str, recipient: Recipient, images: List[Image]) -> None:
         self.email_address = email_address
         self.recipient = recipient
         # We assume that logo is the last image in the images list
@@ -102,7 +103,7 @@ class WeeklyEmail(Email):
     header = 'SIIF Weekly Report'
 
     def __init__(
-        self, email_address: str, recipient: Recipient, images: list[Image], portfolio: "pd.Series[float]"
+        self, email_address: str, recipient: Recipient, images: List[Image], portfolio: "pd.Series[float]"
     ) -> None:
         self.portfolio = portfolio
         super().__init__(email_address, recipient, images)
@@ -132,7 +133,7 @@ class DailyEmail(Email):
     ''' Create and send daily emails '''
     header = 'SIIF - Large Stock Movement Alert'
 
-    def __init__(self, email_address: str, recipient: Recipient, images: list[Image], daily_changes: list[tuple[str, float]]) -> None:
+    def __init__(self, email_address: str, recipient: Recipient, images: List[Image], daily_changes: List[Tuple[str, float]]) -> None:
         self.daily_changes = daily_changes
         super().__init__(email_address, recipient, images)
 

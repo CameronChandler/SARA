@@ -3,6 +3,7 @@ import pandas as pd
 import datetime as dt
 from yahooquery import Ticker
 from enum import Enum, auto
+from typing import List, Tuple
 
 class PortfolioChoice(Enum):
     SIIF = auto()
@@ -125,7 +126,7 @@ class Portfolio:
         self.portfolio_value = self.get_portfolio_value()
         self.returns = self.get_returns()
         
-    def load_portfolio(self) -> tuple[list[Share], list[CashFlow], list[Dividend]]:
+    def load_portfolio(self) -> Tuple[List[Share], List[CashFlow], List[Dividend]]:
         ''' Loads units, price, sell_price, buy_date, sell_date and code as registered in the data csv '''
         # First, work out when the portfolio starts
         data = pd.read_csv('./portfolios/'+self.filename+'.csv').dropna(how='all')

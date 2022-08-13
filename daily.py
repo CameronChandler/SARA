@@ -9,6 +9,7 @@ warnings.filterwarnings("ignore")
 from time import sleep
 import numpy as np
 import sys
+from typing import List
 
 ############## INPUT PARAMETERS ############## 
 args = sys.argv[1:]
@@ -24,7 +25,7 @@ log = Logger('DAILY', running_level)
 log.begin()
 ####################################### STEP 1. PREPARE DATA ########################################
 
-def load_data(codes: list[str], start: dt.date=Date.last_week()) -> pd.DataFrame:
+def load_data(codes: List[str], start: dt.date=Date.last_week()) -> pd.DataFrame:
     ''' Takes list of shares and returns data from the start date '''
     daily = pd.DataFrame({'date': []})
 
@@ -46,9 +47,9 @@ emails = pd.read_csv('./data/emails.csv')
 recipients_test = emails[emails['name'] == TEST_NAME]
 recipients_prod = emails
 recipients_data = recipients_prod if running_level == RunningLevel.PROD else recipients_test
-recipients: list[Recipient] = []
+recipients: List[Recipient] = []
 for _, row in recipients_data.iterrows():
-    codes: list[str] = [] if row['stocks'] is np.nan else row['stocks'].split()
+    codes: List[str] = [] if row['stocks'] is np.nan else row['stocks'].split()
     recipients.append(Recipient(row['email'], row['name'], codes, float(row['sensitivity'])))
 
 email_address = "sarasiifbot@gmail.com"
@@ -82,7 +83,7 @@ try:
         all_files = [(f'./images/{filename}.png', GRAPH_SCALE), 
                      ('./images/SIIF Logo.png', LOGO_SCALE)]
 
-        images: list[Image] = [Image(path, width, height) for path, (width, height) in all_files]
+        images: List[Image] = [Image(path, width, height) for path, (width, height) in all_files]
 
         try:
             email = DailyEmail(email_address, recipient, images, daily_changes)

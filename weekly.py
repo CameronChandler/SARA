@@ -1,3 +1,7 @@
+# Stock Alert Report Automaton
+# SIIF Automated Reporting Assistant
+# - SARA
+
 import pandas as pd
 from emails import WeeklyEmail, Recipient, Image, send_email, LOGO_SCALE, GRAPH_SCALE
 from portfolio import Portfolio, PortfolioChoice
@@ -7,6 +11,7 @@ import warnings
 warnings.filterwarnings("ignore")
 from time import sleep
 import sys
+from typing import List
 
 ############## INPUT PARAMETERS ############## 
 args = sys.argv[1:]
@@ -21,9 +26,6 @@ else:
         portfolio_choice = PortfolioChoice.SIIF
     else:
         portfolio_choice = PortfolioChoice.TEST
-
-#running_level = RunningLevel.TEST
-#portfolio_choice = PortfolioChoice.SIIF     
 
 log = Logger('WEEKLY', running_level)
 log.begin()
@@ -41,10 +43,6 @@ plot_portfolio(portfolios[0])
 plot_portfolios(portfolios)
 
 ######################################## STEP 3. SEND EMAILS ########################################
-# Stock Alert Report Automaton
-# SIIF Automated Reporting Assistant
-# - Sara
-
 TEST_NAME = 'Cameron'
         
 # Load analyst emails
@@ -63,7 +61,7 @@ all_files = [('./images/strategy_comparison.png', GRAPH_SCALE),
              ('./images/single_stocks.png', GRAPH_SCALE),
              ('./images/SIIF Logo.png', LOGO_SCALE)]
 
-images: list[Image] = [Image(path, width, height) for path, (width, height) in all_files]
+images: List[Image] = [Image(path, width, height) for path, (width, height) in all_files]
 
 for recipient in recipients:
     try:
