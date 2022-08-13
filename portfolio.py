@@ -35,7 +35,7 @@ class Share:
         timeline: dataframe of share information
     '''
     
-    def __init__(self, transactions: pd.DataFrame, dates: pd.Series[dt.date]) -> None:
+    def __init__(self, transactions: pd.DataFrame, dates: "pd.Series[dt.date]") -> None:
         self.code: str = transactions.iloc[0].code
         self.transactions = transactions.sort_values('date')
         self.dates = dates
