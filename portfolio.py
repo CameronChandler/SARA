@@ -76,6 +76,9 @@ class Share:
     def _gen_real_prices(self) -> pd.DataFrame:
         ''' Attempt to generate real prices. Returns None if prices cannot be found '''
         prices = Ticker(f'{self.code}.AX').history(start=self.dates[0])
+        #### THIS IS THE CHANGE HERE THAT IS CAUSING ValueError: You are trying to merge on object and datetime64[ns] columns. If you wish to proceed you should use pd.concat
+        #### IT WAS NECESSARY IN ORDER TO AVOID GSS GIVING DUPLICATE DATES ON INDEX FROM Ticker CALL
+        #prices = prices.reset_index().drop_duplicates(subset='date', keep='first').set_index(['symbol', 'date'])
         if isinstance(prices, dict):
             return None
         
