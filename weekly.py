@@ -3,38 +3,24 @@
 # - SARA
 
 import pandas as pd
-from emails import WeeklyEmail, Recipient, Image, send_email, LOGO_SCALE, GRAPH_SCALE
+from emails import WeeklyEmail, Recipient, Image, send_email, GRAPH_SCALE
 from portfolio import Portfolio, PortfolioChoice
-from logger import Logger, RunningLevel
+from logger import Logger
 from plotting import plot_portfolio, plot_portfolios
 import warnings
 warnings.filterwarnings("ignore")
 from time import sleep
-import sys
 from typing import List
 
 ############## INPUT PARAMETERS ############## 
-args = sys.argv[1:]
+portfolio_choice = PortfolioChoice.TEST
 
-if args and args[0] == 'prod':
-    running_level = RunningLevel.PROD
-    portfolio_choice = PortfolioChoice.SIIF
-else:
-    running_level = RunningLevel.TEST
-    
-    if args and args[1] == 'siif':
-        portfolio_choice = PortfolioChoice.SIIF
-    else:
-        portfolio_choice = PortfolioChoice.TEST
-
-log = Logger('WEEKLY', running_level)
+log = Logger('WEEKLY')
 log.begin()
 ####################################### STEP 1. PREPARE DATA ########################################
 
 # Portfolio Name: Portfolio CSV file
-test_portfolios = {'SIIF': 'TEST', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
-siif_portfolios = {'SIIF': 'SIIF', 'NDQ': 'NDQ', 'A200': 'A200'} # 'MPT': 'MPT',  'SIIF Balanced': 'SIIF_MPT',
-names = test_portfolios if portfolio_choice == PortfolioChoice.TEST else siif_portfolios
+names = {'portfolio': 'portfolio', 'NDQ': 'TEST_NDQ', 'A200': 'TEST_A200'}
 # ENSURE THAT THE MAIN PORTFOLIO IS ADDED TO `portfolios` FIRST
 portfolios = [Portfolio(name, names[name]) for name in names]
 
@@ -43,23 +29,20 @@ plot_portfolio(portfolios[0])
 plot_portfolios(portfolios)
 
 ######################################## STEP 3. SEND EMAILS ########################################
-TEST_NAME = 'Cameron'
         
 # Load analyst emails
-emails = pd.read_csv('./data/emails.csv')
-recipients_test = emails[emails['name'] == TEST_NAME]
-recipients_prod = emails
-recipients = recipients_prod if running_level == RunningLevel.PROD else recipients_test
-recipients = [Recipient(row['email'], row['name']) for _, row in recipients.iterrows()]
+emails = pd.read_csv('./data/emails.csv') # type: ignore
+recipients = [Recipient(row['email'], row['name']) for _, row in emails.iterrows()]
 
-email_address = "sarasiifbot@gmail.com"
+with open('./data/bot email.txt') as fp:
+    email_address = fp.read()
+    
 with open('./data/password.txt') as fp:
     email_password = fp.read()
 
 # Make sure the logo is last in the list
 all_files = [('./images/strategy_comparison.png', GRAPH_SCALE), 
-             ('./images/single_stocks.png', GRAPH_SCALE),
-             ('./images/SIIF Logo.png', LOGO_SCALE)]
+             ('./images/single_stocks.png', GRAPH_SCALE)]
 
 images: List[Image] = [Image(path, width, height) for path, (width, height) in all_files]
 

@@ -1,6 +1,6 @@
 log.txt
 data/
-portfolios/TEST.csv
+portfolios/portfolio.csv
 .ipynb_checkpoints/
 main/
 __pycache__/

@@ -1,5 +1,4 @@
 import logging
-from enum import Enum, auto
 import datetime as dt
 
 class Date:
@@ -11,20 +10,15 @@ class Date:
     def last_week(cls) -> dt.date:
         return cls.today() - dt.timedelta(days=7)
 
-class RunningLevel(Enum):
-    PROD = auto()
-    TEST = auto()
-
 class Logger:
-    log_filename = {RunningLevel.PROD: 'log.txt', RunningLevel.TEST: 'test_log.txt'}
+    log_filename = 'log.txt'
 
-    def __init__(self, frequency: str, running_level: RunningLevel=RunningLevel.TEST) -> None:
+    def __init__(self, frequency: str) -> None:
         self.frequency = frequency
-        self.running_level = running_level
         logging.basicConfig(
             format='%(asctime)s %(levelname)s: %(message)s',
             handlers=[
-                logging.FileHandler(self.log_filename[self.running_level]),
+                logging.FileHandler(self.log_filename),
                 logging.StreamHandler()
             ],
             level=logging.INFO

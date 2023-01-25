@@ -22,7 +22,6 @@ class Recipient:
     codes: List[str] = field(default_factory=list)
     sensitivity: float = float('inf')
 
-LOGO_SCALE = (258, 155)
 GRAPH_SCALE = (691, 389)
 
 @dataclass
@@ -50,9 +49,7 @@ class Email(ABC):
     def __init__(self, email_address: str, recipient: Recipient, images: List[Image]) -> None:
         self.email_address = email_address
         self.recipient = recipient
-        # We assume that logo is the last image in the images list
-        self.images = images[:-1]
-        self.logo = images[-1]
+        self.images = images
         self.email = self._create_email()
 
     @abstractmethod
@@ -78,13 +75,7 @@ class Email(ABC):
         return msg
 
     def _create_signoff_html(self) -> str:
-        return f'''<p>Have a great day!</p><p>From Sara (SIIF Automated Reporting Assistant)</p>
-        {self._create_image_html(self.logo)}
-        <p>---------------------------------</p>
-        <p><small>Do not reply to this email</small></p>
-        <p><small>Code available at https://github.com/CameronChandler/SARA</small></p>
-        <p><small>Disclaimer: This email is automated and the data/visualisations/calculations are subject to errors!</small></p>
-        <p><small>This has not been checked by a human, so please do not use to inform your financial decisions.</small></p>'''
+        return f'<p>Have a great day!</p><p>From Sara (SIIF Automated Reporting Assistant)</p>'
     
     def _create_email(self) -> str:
         msg = self._generate_message(self.recipient, self.header)
@@ -92,7 +83,7 @@ class Email(ABC):
         msg.attach(alt)
 
         alt.attach(self._create_html_body(self.recipient))
-        for image in self.images + [self.logo]:
+        for image in self.images:
             msg.attach(image.graphic)
 
         return msg.as_string()
